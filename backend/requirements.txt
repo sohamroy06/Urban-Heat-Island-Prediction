@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+numpy>=2.1
+pandas>=2.2
+scikit-learn>=1.6
+shapely
+requests
+joblib
+pydantic
+python-multipart

@@ -1,0 +1,25 @@
+{
+  "rmse": 1.2474,
+  "mae": 1.0056,
+  "r2": 0.9099,
+  "spatial_cv_r2": 0.911,
+  "best_params": {
+    "learning_rate": 0.05,
+    "max_depth": 5,
+    "min_samples_split": 5,
+    "n_estimators": 150
+  },
+  "n_train": 176,
+  "n_test": 124,
+  "n_features": 8,
+  "feature_importance": {
+    "building_density": 0.87,
+    "green_cover": 1.03,
+    "road_density": 0.55,
+    "avg_building_height": 0.88,
+    "distance_to_water": 0.33,
+    "impervious_surface_fraction": 4.99,
+    "heat_stress_index": 90.75,
+    "cooling_potential": 0.61
+  }
+}
