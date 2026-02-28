@@ -1,7 +1,10 @@
 """
-main.py — ShadowMap FastAPI Backend
+main.py — ShadowMap FastAPI Backend (AMD GPU-Ready Edition)
 
 All API routes for the Urban Heat Island Prediction & What-If Simulator.
+Backend uses XGBoost with device-agnostic GPU support.
+
+Compatible with: CPU, NVIDIA CUDA, AMD ROCm
 """
 
 import json
@@ -24,10 +27,13 @@ from model import (
     train_model,
     load_models,
     predict_block,
+    predict_batch,
     compute_feature_contributions,
     simulate_whatif,
+    simulate_whatif_batch,
     generate_intervention_curve,
     ARTIFACTS_DIR,
+    XGB_DEVICE,
 )
 
 app_state = {
@@ -45,7 +51,7 @@ def load_or_train():
     """Load existing model artifacts or train from scratch."""
     csv_path = os.path.join(BASE_DIR, "sample_data.csv")
     geojson_path = os.path.join(BASE_DIR, "delhi_blocks.geojson")
-    model_path = os.path.join(ARTIFACTS_DIR, "uhi_model.pkl")
+    model_path = os.path.join(ARTIFACTS_DIR, "uhi_model.json")
 
     if os.path.exists(csv_path):
         print("[STARTUP] Loading data from sample_data.csv")
@@ -91,13 +97,21 @@ def load_or_train():
             "feature_importance": results["feature_importance"],
         }
 
-    print("[STARTUP] Computing predictions for all blocks...")
+    # --- AMD GPU READY SECTION --- Batch prediction at startup ---
+    print(f"[STARTUP] Computing predictions for all blocks (device={XGB_DEVICE})...")
+    batch_features_df = df[FEATURE_COLUMNS].copy()
+    batch_results = predict_batch(batch_features_df, models)
+
     predictions = {}
-    for _, row in df.iterrows():
+    for i, (_, row) in enumerate(df.iterrows()):
         block_id = row["block_id"]
-        features = {col: row[col] for col in FEATURE_COLUMNS}
-        pred = predict_block(features, models)
-        predictions[block_id] = pred
+        predictions[block_id] = {
+            "predicted_lst": float(batch_results.iloc[i]["predicted_lst"]),
+            "ci_lower": float(batch_results.iloc[i]["ci_lower"]),
+            "ci_upper": float(batch_results.iloc[i]["ci_upper"]),
+            "ci_width": float(batch_results.iloc[i]["ci_width"]),
+        }
+    # --- END AMD GPU READY SECTION ---
 
     for feature in geojson["features"]:
         block_id = feature["properties"]["block_id"]
@@ -360,8 +374,13 @@ async def get_model_info():
     metrics = app_state["models"]["metrics"]
     df = app_state["df"]
 
+    # --- AMD GPU READY SECTION --- Model info with device details ---
     return {
-        "model_type": "GradientBoostingRegressor",
+        "model_type": "XGBRegressor",
+        "tree_method": "hist",
+        "device": XGB_DEVICE,
+        "hardware_agnostic": True,
+        "supported_backends": ["CPU", "NVIDIA CUDA", "AMD ROCm"],
         "rmse": metrics["rmse"],
         "mae": metrics["mae"],
         "r2": metrics["r2"],
@@ -385,6 +404,7 @@ async def get_model_info():
             },
         },
     }
+    # --- END AMD GPU READY SECTION ---
 
 
 if __name__ == "__main__":
