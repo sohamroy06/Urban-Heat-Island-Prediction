@@ -8,3 +8,10 @@ requests
 joblib
 pydantic
 python-multipart
+xgboost
+torch
+onnx
+onnxruntime
+onnxruntime-gpu
+onnxmltools
+skl2onnx
