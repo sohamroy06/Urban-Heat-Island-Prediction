@@ -1,19 +1,22 @@
 """
-model.py — ShadowMap ML Model
+model.py — ShadowMap ML Model (AMD GPU-Ready Edition)
 
-GradientBoostingRegressor with spatial cross-validation, quantile regression
-for confidence intervals, and what-if simulation logic.
+XGBoost-based regression with quantile confidence intervals,
+batch inference, and hardware-agnostic GPU support.
+
+Compatible with: CPU, NVIDIA CUDA, AMD ROCm
 """
 
 import json
 import os
+from typing import Optional
 
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor
+import xgboost as xgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.model_selection import GridSearchCV, KFold
+from sklearn.model_selection import KFold
 
 from feature_engineering import (
     ALL_FEATURES,
@@ -28,6 +31,49 @@ ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_
 BLOCK_AREA_KM2 = 0.25  # 500m x 500m block
 AVG_BUILDING_FOOTPRINT_KM2 = 0.0002  # ~200 sq m per building
 AVG_TREE_COVER_KM2 = 0.00005  # ~50 sq m canopy per tree
+
+
+# ---------------------------------------------------------------------------
+# --- AMD GPU READY SECTION --- Device Detection ---------------------------
+# ---------------------------------------------------------------------------
+def get_xgb_device() -> str:
+    """
+    Detect the best available device for XGBoost.
+
+    Uses PyTorch's CUDA detection (fast, works with both CUDA and ROCm).
+    Falls back to environment variable and then CPU.
+
+    XGBoost uses 'cuda' for both NVIDIA and AMD ROCm GPUs when built
+    with the appropriate backend. Falls back to 'cpu' gracefully.
+
+    Returns:
+        'cuda' if a GPU is available, otherwise 'cpu'.
+    """
+    import os
+
+    # Method 1: Use PyTorch's CUDA/ROCm detection (fast and reliable)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            print(f"[INFO] GPU detected via PyTorch: {gpu_name}")
+            print("[INFO] Using device='cuda' (works with CUDA and ROCm)")
+            return "cuda"
+    except ImportError:
+        pass
+
+    # Method 2: Check for ROCm environment variable
+    if os.environ.get("ROCM_HOME") or os.environ.get("HIP_VISIBLE_DEVICES"):
+        print("[INFO] ROCm environment detected — using device='cuda'")
+        return "cuda"
+
+    print("[INFO] No GPU detected — using device='cpu'")
+    return "cpu"
+
+
+# Cache the device at module level so detection runs once
+XGB_DEVICE = get_xgb_device()
+# ---------------------------------------------------------------------------
 
 
 def spatial_train_test_split(df: pd.DataFrame, lon_threshold: float = 77.15):
@@ -84,14 +130,18 @@ def spatial_cross_validation(X: np.ndarray, y: np.ndarray, df: pd.DataFrame,
     kf = KFold(n_splits=n_splits, shuffle=False)
     scores = []
 
+    # --- AMD GPU READY SECTION --- Spatial CV uses device-agnostic XGBoost ---
     for train_idx, test_idx in kf.split(X_sorted):
-        model = GradientBoostingRegressor(
+        model = xgb.XGBRegressor(
             n_estimators=200, max_depth=4, learning_rate=0.1,
-            min_samples_split=10, random_state=42
+            min_child_weight=10, random_state=42,
+            tree_method="hist", device=XGB_DEVICE,
+            verbosity=0,
         )
         model.fit(X_sorted[train_idx], y_sorted[train_idx])
         score = model.score(X_sorted[test_idx], y_sorted[test_idx])
         scores.append(score)
+    # --- END AMD GPU READY SECTION ---
 
     mean_score = float(np.mean(scores))
     print(f"[INFO] Spatial CV R² scores: {[f'{s:.4f}' for s in scores]}")
@@ -106,8 +156,8 @@ def train_model(df: pd.DataFrame):
     Steps:
     1. Prepare features with interaction terms
     2. Spatial train/test split
-    3. GridSearchCV for hyperparameter tuning
-    4. Train mean model, lower quantile (0.1), upper quantile (0.9)
+    3. Train mean model (squared error)
+    4. Train lower quantile (0.1) and upper quantile (0.9) models
     5. Compute metrics and feature importances
     6. Save all artifacts
 
@@ -126,40 +176,60 @@ def train_model(df: pd.DataFrame):
     X_train, X_test = X[train_idx], X[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
-    print("\n[INFO] Running GridSearchCV for hyperparameter tuning...")
-    param_grid = {
-        "n_estimators": [150, 200, 300],
-        "max_depth": [3, 4, 5],
-        "learning_rate": [0.05, 0.1],
-        "min_samples_split": [5, 10],
+    # --- AMD GPU READY SECTION --- XGBoost with device-agnostic GPU support ---
+    # tree_method="hist" works across CPU, NVIDIA CUDA, and AMD ROCm.
+    # device parameter selects hardware; XGBoost handles backend dispatch.
+
+    best_params = {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "learning_rate": 0.1,
+        "min_child_weight": 5,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
     }
 
-    base_model = GradientBoostingRegressor(random_state=42)
-    grid_search = GridSearchCV(
-        base_model, param_grid,
-        cv=3, scoring="r2", n_jobs=-1, verbose=0
+    print(f"\n[INFO] Training mean model (device={XGB_DEVICE})...")
+    mean_model = xgb.XGBRegressor(
+        **best_params,
+        objective="reg:squarederror",
+        tree_method="hist",
+        device=XGB_DEVICE,
+        random_state=42,
+        verbosity=1,
     )
-    grid_search.fit(X_train, y_train)
-
-    best_params = grid_search.best_params_
-    print(f"[INFO] Best params: {best_params}")
-
-    mean_model = GradientBoostingRegressor(**best_params, random_state=42)
-    mean_model.fit(X_train, y_train)
+    mean_model.fit(
+        X_train, y_train,
+        eval_set=[(X_test, y_test)],
+        verbose=False,
+    )
 
     print("[INFO] Training lower quantile model (alpha=0.1)...")
-    lower_model = GradientBoostingRegressor(
-        **{k: v for k, v in best_params.items()},
-        loss="quantile", alpha=0.1, random_state=42
+    lower_model = xgb.XGBRegressor(
+        **best_params,
+        objective="reg:quantileerror",
+        quantile_alpha=0.1,
+        tree_method="hist",
+        device=XGB_DEVICE,
+        random_state=42,
+        verbosity=0,
     )
-    lower_model.fit(X_train, y_train)
+    lower_model.fit(X_train, y_train, verbose=False)
 
     print("[INFO] Training upper quantile model (alpha=0.9)...")
-    upper_model = GradientBoostingRegressor(
-        **{k: v for k, v in best_params.items()},
-        loss="quantile", alpha=0.9, random_state=42
+    upper_model = xgb.XGBRegressor(
+        **best_params,
+        objective="reg:quantileerror",
+        quantile_alpha=0.9,
+        tree_method="hist",
+        device=XGB_DEVICE,
+        random_state=42,
+        verbosity=0,
     )
-    upper_model.fit(X_train, y_train)
+    upper_model.fit(X_train, y_train, verbose=False)
+    # --- END AMD GPU READY SECTION ---
 
     y_pred = mean_model.predict(X_test)
     y_pred_lower = lower_model.predict(X_test)
@@ -176,6 +246,7 @@ def train_model(df: pd.DataFrame):
 
     spatial_cv_score = spatial_cross_validation(X, y, df)
 
+    # Feature importance from XGBoost (gain-based)
     importances = mean_model.feature_importances_
     feature_importance = {}
     total_imp = float(importances.sum())
@@ -196,11 +267,15 @@ def train_model(df: pd.DataFrame):
         "n_test": len(test_idx),
         "n_features": len(ALL_FEATURES),
         "feature_importance": feature_importance,
+        "device": XGB_DEVICE,
+        "tree_method": "hist",
+        "model_type": "XGBRegressor",
     }
 
-    joblib.dump(mean_model, os.path.join(ARTIFACTS_DIR, "uhi_model.pkl"))
-    joblib.dump(lower_model, os.path.join(ARTIFACTS_DIR, "uhi_model_lower.pkl"))
-    joblib.dump(upper_model, os.path.join(ARTIFACTS_DIR, "uhi_model_upper.pkl"))
+    # Save models in XGBoost-native JSON format (portable, no pickle)
+    mean_model.save_model(os.path.join(ARTIFACTS_DIR, "uhi_model.json"))
+    lower_model.save_model(os.path.join(ARTIFACTS_DIR, "uhi_model_lower.json"))
+    upper_model.save_model(os.path.join(ARTIFACTS_DIR, "uhi_model_upper.json"))
 
     with open(os.path.join(ARTIFACTS_DIR, "metrics.json"), "w") as f:
         json.dump(metrics, f, indent=2)
@@ -224,12 +299,22 @@ def load_models():
     """
     Load all trained model artifacts from disk.
 
+    Loads XGBoost models from JSON format (portable, hardware-agnostic).
+
     Returns:
         Dictionary containing models, scaler, metrics, and feature importances.
     """
-    mean_model = joblib.load(os.path.join(ARTIFACTS_DIR, "uhi_model.pkl"))
-    lower_model = joblib.load(os.path.join(ARTIFACTS_DIR, "uhi_model_lower.pkl"))
-    upper_model = joblib.load(os.path.join(ARTIFACTS_DIR, "uhi_model_upper.pkl"))
+    # --- AMD GPU READY SECTION --- Load models in device-agnostic format ---
+    mean_model = xgb.XGBRegressor()
+    mean_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model.json"))
+
+    lower_model = xgb.XGBRegressor()
+    lower_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model_lower.json"))
+
+    upper_model = xgb.XGBRegressor()
+    upper_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model_upper.json"))
+    # --- END AMD GPU READY SECTION ---
+
     scaler = load_scaler()
 
     metrics_path = os.path.join(ARTIFACTS_DIR, "metrics.json")
@@ -282,6 +367,54 @@ def predict_block(features_dict: dict, models: dict) -> dict:
         "ci_upper": round(pred_upper, 1),
         "ci_width": round(pred_upper - pred_lower, 1),
     }
+
+
+# ---------------------------------------------------------------------------
+# --- AMD GPU READY SECTION --- Batch Inference ----------------------------
+# ---------------------------------------------------------------------------
+def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
+    """
+    Batch-predict LST for multiple blocks with confidence intervals.
+
+    Vectorized prediction using XGBoost — automatically uses GPU when
+    available (CUDA or ROCm). Falls back to CPU cleanly.
+
+    Args:
+        features_df: DataFrame with raw feature columns for multiple blocks.
+                     Must contain all columns in FEATURE_COLUMNS.
+        models: Dictionary from load_models() or train_model().
+
+    Returns:
+        DataFrame with columns: predicted_lst, ci_lower, ci_upper, ci_width.
+    """
+    df = compute_interaction_features(features_df.copy())
+    X_raw = df[ALL_FEATURES].values
+    X_scaled = models["scaler"].transform(X_raw)
+
+    # XGBoost batch predict — GPU-accelerated when available
+    pred_mean = models["mean_model"].predict(X_scaled)
+    pred_lower = models["lower_model"].predict(X_scaled)
+    pred_upper = models["upper_model"].predict(X_scaled)
+
+    # Fix quantile crossing
+    mask_lower = pred_lower > pred_mean
+    pred_lower[mask_lower] = pred_mean[mask_lower] - np.abs(
+        pred_upper[mask_lower] - pred_mean[mask_lower]
+    )
+    mask_upper = pred_upper < pred_mean
+    pred_upper[mask_upper] = pred_mean[mask_upper] + np.abs(
+        pred_mean[mask_upper] - pred_lower[mask_upper]
+    )
+
+    results = pd.DataFrame({
+        "predicted_lst": np.round(pred_mean, 1),
+        "ci_lower": np.round(pred_lower, 1),
+        "ci_upper": np.round(pred_upper, 1),
+        "ci_width": np.round(pred_upper - pred_lower, 1),
+    }, index=features_df.index)
+
+    return results
+# ---------------------------------------------------------------------------
 
 
 def compute_feature_contributions(features_dict: dict, models: dict, city_mean_lst: float) -> list:
@@ -464,6 +597,84 @@ def simulate_whatif(
         },
         "narrative_explanation": narrative,
     }
+
+
+# ---------------------------------------------------------------------------
+# --- AMD GPU READY SECTION --- Batch What-If Simulation -------------------
+# ---------------------------------------------------------------------------
+def simulate_whatif_batch(
+    blocks_df: pd.DataFrame,
+    delta_buildings: int,
+    delta_trees: int,
+    delta_albedo: float,
+    models: dict,
+) -> pd.DataFrame:
+    """
+    Simulate what-if scenarios for multiple blocks in batch.
+
+    Vectorized version of simulate_whatif() — uses GPU-accelerated batch
+    prediction for both baseline and modified scenarios.
+
+    Args:
+        blocks_df: DataFrame with feature columns for multiple blocks.
+        delta_buildings: Number of buildings to add (0-50).
+        delta_trees: Number of trees to add (0-500).
+        delta_albedo: Percentage increase in roof albedo (0-50).
+        models: Dictionary from load_models().
+
+    Returns:
+        DataFrame with baseline_lst, predicted_lst, delta_temp per block.
+    """
+    # Baseline predictions (batch)
+    baseline_preds = predict_batch(blocks_df[FEATURE_COLUMNS], models)
+
+    # Apply modifications
+    modified_df = blocks_df[FEATURE_COLUMNS].copy()
+
+    if delta_buildings > 0:
+        added_area = delta_buildings * AVG_BUILDING_FOOTPRINT_KM2
+        density_inc = added_area / BLOCK_AREA_KM2
+        modified_df["building_density"] = np.minimum(
+            0.95, modified_df["building_density"] + density_inc
+        )
+        modified_df["impervious_surface_fraction"] = np.minimum(
+            0.98, modified_df["impervious_surface_fraction"] + density_inc * 0.8
+        )
+
+    if delta_trees > 0:
+        added_canopy = delta_trees * AVG_TREE_COVER_KM2
+        gc_inc = added_canopy / BLOCK_AREA_KM2
+        modified_df["green_cover"] = np.minimum(
+            0.90, modified_df["green_cover"] + gc_inc
+        )
+        modified_df["impervious_surface_fraction"] = np.maximum(
+            0.05, modified_df["impervious_surface_fraction"] - gc_inc * 0.5
+        )
+
+    if delta_albedo > 0:
+        albedo_factor = delta_albedo / 100.0
+        modified_df["building_density"] = np.maximum(
+            0.01, modified_df["building_density"] * (1 - albedo_factor * 0.15)
+        )
+        modified_df["impervious_surface_fraction"] = np.maximum(
+            0.05, modified_df["impervious_surface_fraction"] * (1 - albedo_factor * 0.10)
+        )
+
+    # Modified predictions (batch)
+    modified_preds = predict_batch(modified_df, models)
+
+    results = pd.DataFrame({
+        "baseline_lst": baseline_preds["predicted_lst"],
+        "predicted_lst": modified_preds["predicted_lst"],
+        "delta_temp": np.round(
+            modified_preds["predicted_lst"].values - baseline_preds["predicted_lst"].values, 1
+        ),
+        "ci_lower": modified_preds["ci_lower"],
+        "ci_upper": modified_preds["ci_upper"],
+    }, index=blocks_df.index)
+
+    return results
+# ---------------------------------------------------------------------------
 
 
 def generate_intervention_curve(
