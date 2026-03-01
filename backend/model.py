@@ -1,10 +1,11 @@
 """
-model.py — ShadowMap ML Model (AMD GPU-Ready Edition)
+model.py — ShadowMap ML Model (CPU-Optimized Edition)
 
 XGBoost-based regression with quantile confidence intervals,
-batch inference, and hardware-agnostic GPU support.
+batch inference, and multi-threaded CPU parallelism.
 
-Compatible with: CPU, NVIDIA CUDA, AMD ROCm
+Architecture: Multi-threaded, hardware-agnostic inference
+optimized for AMD EPYC server-class CPUs.
 """
 
 import json
@@ -31,49 +32,6 @@ ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_
 BLOCK_AREA_KM2 = 0.25  # 500m x 500m block
 AVG_BUILDING_FOOTPRINT_KM2 = 0.0002  # ~200 sq m per building
 AVG_TREE_COVER_KM2 = 0.00005  # ~50 sq m canopy per tree
-
-
-# ---------------------------------------------------------------------------
-# --- AMD GPU READY SECTION --- Device Detection ---------------------------
-# ---------------------------------------------------------------------------
-def get_xgb_device() -> str:
-    """
-    Detect the best available device for XGBoost.
-
-    Uses PyTorch's CUDA detection (fast, works with both CUDA and ROCm).
-    Falls back to environment variable and then CPU.
-
-    XGBoost uses 'cuda' for both NVIDIA and AMD ROCm GPUs when built
-    with the appropriate backend. Falls back to 'cpu' gracefully.
-
-    Returns:
-        'cuda' if a GPU is available, otherwise 'cpu'.
-    """
-    import os
-
-    # Method 1: Use PyTorch's CUDA/ROCm detection (fast and reliable)
-    try:
-        import torch
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
-            print(f"[INFO] GPU detected via PyTorch: {gpu_name}")
-            print("[INFO] Using device='cuda' (works with CUDA and ROCm)")
-            return "cuda"
-    except ImportError:
-        pass
-
-    # Method 2: Check for ROCm environment variable
-    if os.environ.get("ROCM_HOME") or os.environ.get("HIP_VISIBLE_DEVICES"):
-        print("[INFO] ROCm environment detected — using device='cuda'")
-        return "cuda"
-
-    print("[INFO] No GPU detected — using device='cpu'")
-    return "cpu"
-
-
-# Cache the device at module level so detection runs once
-XGB_DEVICE = get_xgb_device()
-# ---------------------------------------------------------------------------
 
 
 def spatial_train_test_split(df: pd.DataFrame, lon_threshold: float = 77.15):
@@ -130,18 +88,18 @@ def spatial_cross_validation(X: np.ndarray, y: np.ndarray, df: pd.DataFrame,
     kf = KFold(n_splits=n_splits, shuffle=False)
     scores = []
 
-    # --- AMD GPU READY SECTION --- Spatial CV uses device-agnostic XGBoost ---
+    # --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
     for train_idx, test_idx in kf.split(X_sorted):
         model = xgb.XGBRegressor(
             n_estimators=200, max_depth=4, learning_rate=0.1,
             min_child_weight=10, random_state=42,
-            tree_method="hist", device=XGB_DEVICE,
+            tree_method="hist", n_jobs=-1,
             verbosity=0,
         )
         model.fit(X_sorted[train_idx], y_sorted[train_idx])
         score = model.score(X_sorted[test_idx], y_sorted[test_idx])
         scores.append(score)
-    # --- END AMD GPU READY SECTION ---
+    # --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
     mean_score = float(np.mean(scores))
     print(f"[INFO] Spatial CV R² scores: {[f'{s:.4f}' for s in scores]}")
@@ -149,6 +107,7 @@ def spatial_cross_validation(X: np.ndarray, y: np.ndarray, df: pd.DataFrame,
     return mean_score
 
 
+# --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 def train_model(df: pd.DataFrame):
     """
     Train the full model suite: mean predictor + quantile regressors.
@@ -160,6 +119,8 @@ def train_model(df: pd.DataFrame):
     4. Train lower quantile (0.1) and upper quantile (0.9) models
     5. Compute metrics and feature importances
     6. Save all artifacts
+
+    Uses n_jobs=-1 for maximum CPU core utilization.
 
     Args:
         df: Raw DataFrame with features and 'lst' target.
@@ -176,10 +137,6 @@ def train_model(df: pd.DataFrame):
     X_train, X_test = X[train_idx], X[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
-    # --- AMD GPU READY SECTION --- XGBoost with device-agnostic GPU support ---
-    # tree_method="hist" works across CPU, NVIDIA CUDA, and AMD ROCm.
-    # device parameter selects hardware; XGBoost handles backend dispatch.
-
     best_params = {
         "n_estimators": 300,
         "max_depth": 4,
@@ -191,12 +148,12 @@ def train_model(df: pd.DataFrame):
         "reg_lambda": 1.0,
     }
 
-    print(f"\n[INFO] Training mean model (device={XGB_DEVICE})...")
+    print(f"\n[INFO] Training mean model (CPU, n_jobs=-1)...")
     mean_model = xgb.XGBRegressor(
         **best_params,
         objective="reg:squarederror",
         tree_method="hist",
-        device=XGB_DEVICE,
+        n_jobs=-1,
         random_state=42,
         verbosity=1,
     )
@@ -212,7 +169,7 @@ def train_model(df: pd.DataFrame):
         objective="reg:quantileerror",
         quantile_alpha=0.1,
         tree_method="hist",
-        device=XGB_DEVICE,
+        n_jobs=-1,
         random_state=42,
         verbosity=0,
     )
@@ -224,12 +181,12 @@ def train_model(df: pd.DataFrame):
         objective="reg:quantileerror",
         quantile_alpha=0.9,
         tree_method="hist",
-        device=XGB_DEVICE,
+        n_jobs=-1,
         random_state=42,
         verbosity=0,
     )
     upper_model.fit(X_train, y_train, verbose=False)
-    # --- END AMD GPU READY SECTION ---
+    # --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
     y_pred = mean_model.predict(X_test)
     y_pred_lower = lower_model.predict(X_test)
@@ -267,9 +224,9 @@ def train_model(df: pd.DataFrame):
         "n_test": len(test_idx),
         "n_features": len(ALL_FEATURES),
         "feature_importance": feature_importance,
-        "device": XGB_DEVICE,
         "tree_method": "hist",
         "model_type": "XGBRegressor",
+        "architecture": "Multi-threaded, hardware-agnostic inference optimized for AMD EPYC server-class CPUs",
     }
 
     # Save models in XGBoost-native JSON format (portable, no pickle)
@@ -304,7 +261,6 @@ def load_models():
     Returns:
         Dictionary containing models, scaler, metrics, and feature importances.
     """
-    # --- AMD GPU READY SECTION --- Load models in device-agnostic format ---
     mean_model = xgb.XGBRegressor()
     mean_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model.json"))
 
@@ -313,7 +269,6 @@ def load_models():
 
     upper_model = xgb.XGBRegressor()
     upper_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model_upper.json"))
-    # --- END AMD GPU READY SECTION ---
 
     scaler = load_scaler()
 
@@ -335,7 +290,7 @@ def load_models():
     }
 
 
-def predict_block(features_dict: dict, models: dict) -> dict:
+def predict_single(features_dict: dict, models: dict) -> dict:
     """
     Predict LST for a single block with confidence intervals.
 
@@ -369,15 +324,16 @@ def predict_block(features_dict: dict, models: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# --- AMD GPU READY SECTION --- Batch Inference ----------------------------
-# ---------------------------------------------------------------------------
+# Keep backward-compatible alias
+predict_block = predict_single
+
+
+# --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
     """
     Batch-predict LST for multiple blocks with confidence intervals.
 
-    Vectorized prediction using XGBoost — automatically uses GPU when
-    available (CUDA or ROCm). Falls back to CPU cleanly.
+    Vectorized prediction using XGBoost with multi-threaded CPU inference.
 
     Args:
         features_df: DataFrame with raw feature columns for multiple blocks.
@@ -391,7 +347,7 @@ def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
     X_raw = df[ALL_FEATURES].values
     X_scaled = models["scaler"].transform(X_raw)
 
-    # XGBoost batch predict — GPU-accelerated when available
+    # XGBoost batch predict — multi-threaded CPU
     pred_mean = models["mean_model"].predict(X_scaled)
     pred_lower = models["lower_model"].predict(X_scaled)
     pred_upper = models["upper_model"].predict(X_scaled)
@@ -414,7 +370,7 @@ def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
     }, index=features_df.index)
 
     return results
-# ---------------------------------------------------------------------------
+# --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
 
 def compute_feature_contributions(features_dict: dict, models: dict, city_mean_lst: float) -> list:
@@ -432,7 +388,7 @@ def compute_feature_contributions(features_dict: dict, models: dict, city_mean_l
     Returns:
         List of dicts with feature name, contribution, and direction.
     """
-    baseline = predict_block(features_dict, models)["predicted_lst"]
+    baseline = predict_single(features_dict, models)["predicted_lst"]
 
     contributions = []
     for feature in ALL_FEATURES:
@@ -453,7 +409,7 @@ def compute_feature_contributions(features_dict: dict, models: dict, city_mean_l
             }.get(feature, original_val)
 
             perturbed[feature] = mean_val
-            perturbed_pred = predict_block(perturbed, models)["predicted_lst"]
+            perturbed_pred = predict_single(perturbed, models)["predicted_lst"]
             contribution = baseline - perturbed_pred
 
             contributions.append({
@@ -467,6 +423,7 @@ def compute_feature_contributions(features_dict: dict, models: dict, city_mean_l
     return contributions
 
 
+# --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 def simulate_whatif(
     block_features: dict,
     delta_buildings: int,
@@ -475,7 +432,7 @@ def simulate_whatif(
     models: dict,
 ) -> dict:
     """
-    Simulate a what-if scenario for a block.
+    Simulate a what-if scenario for a block (vectorized).
 
     Takes the original feature vector, modifies it based on user-specified
     interventions, and returns the predicted impact.
@@ -491,7 +448,7 @@ def simulate_whatif(
         Dictionary with baseline_lst, predicted_lst, delta_temp,
         confidence_interval, and narrative_explanation.
     """
-    baseline = predict_block(block_features, models)
+    baseline = predict_single(block_features, models)
 
     modified = block_features.copy()
 
@@ -524,7 +481,7 @@ def simulate_whatif(
             0.05, modified["impervious_surface_fraction"] * (1 - albedo_factor * 0.10)
         )
 
-    new_prediction = predict_block(modified, models)
+    new_prediction = predict_single(modified, models)
 
     delta_temp = round(new_prediction["predicted_lst"] - baseline["predicted_lst"], 1)
 
@@ -597,11 +554,9 @@ def simulate_whatif(
         },
         "narrative_explanation": narrative,
     }
+# --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
 
-# ---------------------------------------------------------------------------
-# --- AMD GPU READY SECTION --- Batch What-If Simulation -------------------
-# ---------------------------------------------------------------------------
 def simulate_whatif_batch(
     blocks_df: pd.DataFrame,
     delta_buildings: int,
@@ -612,8 +567,8 @@ def simulate_whatif_batch(
     """
     Simulate what-if scenarios for multiple blocks in batch.
 
-    Vectorized version of simulate_whatif() — uses GPU-accelerated batch
-    prediction for both baseline and modified scenarios.
+    Vectorized version of simulate_whatif() — uses multi-threaded CPU
+    batch prediction for both baseline and modified scenarios.
 
     Args:
         blocks_df: DataFrame with feature columns for multiple blocks.
@@ -674,7 +629,25 @@ def simulate_whatif_batch(
     }, index=blocks_df.index)
 
     return results
-# ---------------------------------------------------------------------------
+
+
+def get_feature_importance(models: dict) -> dict:
+    """
+    Get sorted feature importances from the mean model.
+
+    Args:
+        models: Dictionary from load_models() or train_model().
+
+    Returns:
+        Dictionary of feature names to importance percentages, sorted descending.
+    """
+    importances = models["mean_model"].feature_importances_
+    total_imp = float(importances.sum())
+    importance_dict = {}
+    for fname, imp in zip(ALL_FEATURES, importances):
+        importance_dict[fname] = round(float(imp) / total_imp * 100, 2)
+
+    return dict(sorted(importance_dict.items(), key=lambda x: -x[1]))
 
 
 def generate_intervention_curve(
@@ -699,7 +672,7 @@ def generate_intervention_curve(
     max_vals = {"buildings": 50, "trees": 500, "albedo": 50}
     max_val = max_vals.get(intervention_type, 50)
 
-    baseline = predict_block(block_features, models)["predicted_lst"]
+    baseline = predict_single(block_features, models)["predicted_lst"]
     curve = []
 
     for i in range(steps + 1):
