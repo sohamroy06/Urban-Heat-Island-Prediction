@@ -1,10 +1,11 @@
 """
-main.py — ShadowMap FastAPI Backend (AMD GPU-Ready Edition)
+main.py — ShadowMap FastAPI Backend (CPU-Optimized Edition)
 
 All API routes for the Urban Heat Island Prediction & What-If Simulator.
-Backend uses XGBoost with device-agnostic GPU support.
+Backend uses XGBoost with multi-threaded CPU inference.
 
-Compatible with: CPU, NVIDIA CUDA, AMD ROCm
+Architecture: Multi-threaded, hardware-agnostic inference
+optimized for AMD EPYC server-class CPUs.
 """
 
 import json
@@ -32,8 +33,8 @@ from model import (
     simulate_whatif,
     simulate_whatif_batch,
     generate_intervention_curve,
+    get_feature_importance,
     ARTIFACTS_DIR,
-    XGB_DEVICE,
 )
 
 app_state = {
@@ -97,8 +98,8 @@ def load_or_train():
             "feature_importance": results["feature_importance"],
         }
 
-    # --- AMD GPU READY SECTION --- Batch prediction at startup ---
-    print(f"[STARTUP] Computing predictions for all blocks (device={XGB_DEVICE})...")
+    # --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
+    print(f"[STARTUP] Computing predictions for all blocks (CPU, n_jobs=-1)...")
     batch_features_df = df[FEATURE_COLUMNS].copy()
     batch_results = predict_batch(batch_features_df, models)
 
@@ -111,7 +112,7 @@ def load_or_train():
             "ci_upper": float(batch_results.iloc[i]["ci_upper"]),
             "ci_width": float(batch_results.iloc[i]["ci_width"]),
         }
-    # --- END AMD GPU READY SECTION ---
+    # --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
     for feature in geojson["features"]:
         block_id = feature["properties"]["block_id"]
@@ -192,7 +193,7 @@ def load_or_train():
 async def lifespan(app: FastAPI):
     """Startup and shutdown events for the FastAPI app."""
     print("=" * 60)
-    print("ShadowMap API — Starting Up")
+    print("ShadowMap API — Starting Up (CPU-Optimized)")
     print("=" * 60)
     try:
         load_or_train()
@@ -207,7 +208,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ShadowMap API",
     description="Urban Heat Island Prediction & What-If Simulator for Delhi",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -374,13 +375,11 @@ async def get_model_info():
     metrics = app_state["models"]["metrics"]
     df = app_state["df"]
 
-    # --- AMD GPU READY SECTION --- Model info with device details ---
     return {
         "model_type": "XGBRegressor",
         "tree_method": "hist",
-        "device": XGB_DEVICE,
+        "architecture": "Multi-threaded, hardware-agnostic inference optimized for AMD EPYC server-class CPUs",
         "hardware_agnostic": True,
-        "supported_backends": ["CPU", "NVIDIA CUDA", "AMD ROCm"],
         "rmse": metrics["rmse"],
         "mae": metrics["mae"],
         "r2": metrics["r2"],
@@ -404,7 +403,6 @@ async def get_model_info():
             },
         },
     }
-    # --- END AMD GPU READY SECTION ---
 
 
 if __name__ == "__main__":
