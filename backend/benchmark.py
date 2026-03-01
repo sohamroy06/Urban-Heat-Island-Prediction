@@ -1,16 +1,18 @@
 """
-benchmark.py — ShadowMap Inference Benchmarking (AMD GPU-Ready Edition)
+benchmark.py — ShadowMap Inference Benchmarking (CPU-Optimized Edition)
 
 Benchmarks single and batch inference latency for XGBoost and ONNX Runtime.
-Reports device information and latency comparisons.
+Reports CPU core count and latency comparisons.
 
-Compatible with: CPU, NVIDIA CUDA, AMD ROCm
+Architecture: Multi-threaded, hardware-agnostic inference
+optimized for AMD EPYC server-class CPUs.
 """
 
 import os
 import sys
 import time
 import platform
+import multiprocessing
 
 import numpy as np
 import pandas as pd
@@ -20,50 +22,40 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_artifacts")
 
 
-def print_device_info():
+# --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
+def print_system_info():
     """
-    Print comprehensive device and platform information.
+    Print comprehensive system and CPU information.
     """
-    print("=" * 60)
-    print("DEVICE & PLATFORM INFORMATION")
-    print("=" * 60)
-    print(f"  OS:           {platform.system()} {platform.release()}")
-    print(f"  Platform:     {platform.platform()}")
-    print(f"  Processor:    {platform.processor()}")
-    print(f"  Architecture: {platform.machine()}")
-    print(f"  Python:       {platform.python_version()}")
+    cpu_count = multiprocessing.cpu_count()
 
-    # --- AMD GPU READY SECTION --- Device Detection ---
+    print("=" * 60)
+    print("SYSTEM & CPU INFORMATION")
+    print("=" * 60)
+    print(f"  OS:             {platform.system()} {platform.release()}")
+    print(f"  Platform:       {platform.platform()}")
+    print(f"  Processor:      {platform.processor()}")
+    print(f"  Architecture:   {platform.machine()}")
+    print(f"  Python:         {platform.python_version()}")
+    print(f"  CPU Core Count: {cpu_count}")
+    print(f"  Parallelism:    n_jobs=-1 (all {cpu_count} cores)")
+
     try:
         import xgboost as xgb
-        print(f"  XGBoost:      {xgb.__version__}")
+        print(f"  XGBoost:        {xgb.__version__}")
     except ImportError:
-        print(f"  XGBoost:      not installed")
-
-    try:
-        import torch
-        print(f"  PyTorch:      {torch.__version__}")
-        if torch.cuda.is_available():
-            print(f"  GPU Backend:  CUDA / ROCm (via PyTorch)")
-            for i in range(torch.cuda.device_count()):
-                print(f"  GPU {i}:        {torch.cuda.get_device_name(i)}")
-                mem = torch.cuda.get_device_properties(i).total_mem
-                print(f"  GPU {i} Memory: {mem / 1024**3:.1f} GB")
-        else:
-            print(f"  GPU Backend:  None (CPU only)")
-    except ImportError:
-        print(f"  PyTorch:      not installed")
+        print(f"  XGBoost:        not installed")
 
     try:
         import onnxruntime as ort
-        print(f"  ONNX Runtime: {ort.__version__}")
+        print(f"  ONNX Runtime:   {ort.__version__}")
         providers = ort.get_available_providers()
-        print(f"  ORT Providers: {providers}")
+        print(f"  ORT Providers:  {providers}")
     except ImportError:
-        print(f"  ONNX Runtime: not installed")
-    # --- END AMD GPU READY SECTION ---
+        print(f"  ONNX Runtime:   not installed")
 
     print()
+# --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
 
 def benchmark_xgboost_single(models, X_single, n_iterations=100):
@@ -124,7 +116,7 @@ def benchmark_xgboost_batch(models, X_batch, n_iterations=50):
 
 def benchmark_onnx_single(session, input_name, X_single, n_iterations=100):
     """
-    Benchmark single-block ONNX Runtime inference.
+    Benchmark single-block ONNX Runtime inference (CPU).
 
     Args:
         session: ONNX Runtime InferenceSession.
@@ -153,7 +145,7 @@ def benchmark_onnx_single(session, input_name, X_single, n_iterations=100):
 
 def benchmark_onnx_batch(session, input_name, X_batch, n_iterations=50):
     """
-    Benchmark batch ONNX Runtime inference (300 blocks).
+    Benchmark batch ONNX Runtime inference — 300 blocks (CPU).
 
     Args:
         session: ONNX Runtime InferenceSession.
@@ -182,10 +174,10 @@ def benchmark_onnx_batch(session, input_name, X_batch, n_iterations=50):
 
 def run_benchmarks():
     """Run all inference benchmarks and print results."""
-    from model import load_models, XGB_DEVICE
+    from model import load_models
     from feature_engineering import ALL_FEATURES, prepare_features
 
-    print_device_info()
+    print_system_info()
 
     # ---- Load data and models ----
     print("=" * 60)
@@ -202,7 +194,7 @@ def run_benchmarks():
     print(f"  Loaded {len(df)} blocks, {X_all.shape[1]} features")
 
     models = load_models()
-    print(f"  Models loaded (XGBoost device: {XGB_DEVICE})")
+    print(f"  Models loaded (CPU multi-threaded, n_jobs=-1)")
 
     X_single = X_all[:1]          # 1 block
     X_batch = X_all[:300]         # 300 blocks (or all if fewer)
@@ -210,19 +202,22 @@ def run_benchmarks():
     print(f"  Single sample shape: {X_single.shape}")
     print(f"  Batch sample shape:  {X_batch.shape}")
 
+    # --- AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
+    cpu_count = multiprocessing.cpu_count()
+
     # ---- XGBoost Benchmarks ----
     print(f"\n{'=' * 60}")
-    print("XGBOOST INFERENCE BENCHMARKS")
+    print(f"XGBOOST INFERENCE BENCHMARKS (CPU, {cpu_count} cores)")
     print(f"{'=' * 60}")
 
     xgb_single_mean, xgb_single_std = benchmark_xgboost_single(models, X_single)
-    print(f"  Single inference (3 models):  {xgb_single_mean:.3f} ± {xgb_single_std:.3f} ms")
+    print(f"  Single inference (3 models):  {xgb_single_mean:.3f} +/- {xgb_single_std:.3f} ms")
 
     xgb_batch_mean, xgb_batch_std = benchmark_xgboost_batch(models, X_batch)
-    print(f"  Batch inference ({n_batch} blocks, 3 models): {xgb_batch_mean:.3f} ± {xgb_batch_std:.3f} ms")
+    print(f"  Batch inference ({n_batch} blocks, 3 models): {xgb_batch_mean:.3f} +/- {xgb_batch_std:.3f} ms")
     print(f"  Per-block latency (batch):    {xgb_batch_mean / n_batch:.4f} ms")
 
-    # ---- ONNX Runtime Benchmarks ----
+    # ---- ONNX Runtime Benchmarks (CPU only) ----
     onnx_path = os.path.join(ARTIFACTS_DIR, "uhi_model.onnx")
     ort_single_mean = ort_single_std = ort_batch_mean = ort_batch_std = None
 
@@ -230,35 +225,25 @@ def run_benchmarks():
         try:
             import onnxruntime as ort
 
-            # --- AMD GPU READY SECTION --- ONNX Runtime EP Selection ---
-            available_providers = ort.get_available_providers()
-            if "ROCMExecutionProvider" in available_providers:
-                providers = ["ROCMExecutionProvider", "CPUExecutionProvider"]
-                ep_name = "ROCm GPU"
-            elif "CUDAExecutionProvider" in available_providers:
-                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-                ep_name = "CUDA GPU"
-            else:
-                providers = ["CPUExecutionProvider"]
-                ep_name = "CPU"
-            # --- END AMD GPU READY SECTION ---
+            # CPU-only execution provider
+            providers = ["CPUExecutionProvider"]
 
             session = ort.InferenceSession(onnx_path, providers=providers)
             input_name = session.get_inputs()[0].name
 
             print(f"\n{'=' * 60}")
-            print(f"ONNX RUNTIME BENCHMARKS ({ep_name})")
+            print(f"ONNX RUNTIME BENCHMARKS (CPU, {cpu_count} cores)")
             print(f"{'=' * 60}")
 
             ort_single_mean, ort_single_std = benchmark_onnx_single(
                 session, input_name, X_single
             )
-            print(f"  Single inference (mean model): {ort_single_mean:.3f} ± {ort_single_std:.3f} ms")
+            print(f"  Single inference (mean model): {ort_single_mean:.3f} +/- {ort_single_std:.3f} ms")
 
             ort_batch_mean, ort_batch_std = benchmark_onnx_batch(
                 session, input_name, X_batch
             )
-            print(f"  Batch inference ({n_batch} blocks):   {ort_batch_mean:.3f} ± {ort_batch_std:.3f} ms")
+            print(f"  Batch inference ({n_batch} blocks):   {ort_batch_mean:.3f} +/- {ort_batch_std:.3f} ms")
             print(f"  Per-block latency (batch):     {ort_batch_mean / n_batch:.4f} ms")
 
         except ImportError:
@@ -271,17 +256,18 @@ def run_benchmarks():
     print(f"\n{'=' * 60}")
     print("LATENCY COMPARISON SUMMARY")
     print(f"{'=' * 60}")
-    print(f"{'Engine':<25} {'Single (ms)':<18} {'Batch {n_batch} (ms)':<18} {'Per-Block (ms)':<15}")
-    print("-" * 76)
-    print(f"{'XGBoost (' + XGB_DEVICE + ')':<25} {xgb_single_mean:<18.3f} {xgb_batch_mean:<18.3f} {xgb_batch_mean / n_batch:<15.4f}")
+    print(f"  CPU Core Count: {cpu_count}")
+    print(f"  Average Single Inference Latency (XGBoost): {xgb_single_mean:.3f} ms")
+    print(f"  Average Batch  Inference Latency (XGBoost): {xgb_batch_mean:.3f} ms")
 
     if ort_single_mean is not None:
         speedup_single = xgb_single_mean / ort_single_mean if ort_single_mean > 0 else 0
         speedup_batch = xgb_batch_mean / ort_batch_mean if ort_batch_mean > 0 else 0
-        print(f"{'ONNX Runtime (' + ep_name + ')':<25} {ort_single_mean:<18.3f} {ort_batch_mean:<18.3f} {ort_batch_mean / n_batch:<15.4f}")
-        print("-" * 76)
+        print(f"  Average Single Inference Latency (ONNX):    {ort_single_mean:.3f} ms")
+        print(f"  Average Batch  Inference Latency (ONNX):    {ort_batch_mean:.3f} ms")
         print(f"  ONNX vs XGBoost single speedup: {speedup_single:.2f}x")
         print(f"  ONNX vs XGBoost batch speedup:  {speedup_batch:.2f}x")
+    # --- END AMD EPYC OPTIMIZED CPU MULTI-THREAD SECTION ---
 
     print(f"\n{'=' * 60}")
     print("Benchmarking Complete!")
