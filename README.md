@@ -1,14 +1,14 @@
 # ShadowMap — Urban Heat Island Prediction & What-If Simulator
 
-**Predict street-block level Urban Heat Island intensity across Delhi and simulate the impact of urban interventions in real-time.**
+**Predict street-block level Urban Heat Island intensity across Delhi and simulate the impact of urban interventions in real-time.** . 
 
 Built for urban planners, municipal officers, and smart city policymakers  .
 
----
+----
 
 ## Architecture
 
-```
+````
 ┌──────────────────────────────────────────────────────────────┐
 │                     REACT FRONTEND (Vite)                    │
 │  ┌──────────┐  ┌──────────────┐  ┌─────────────────────┐    │
