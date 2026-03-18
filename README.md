@@ -76,6 +76,63 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
+## Free Deployment (Render + Vercel/Netlify)
+
+For this stack, the easiest free deployment is:
+- Backend (FastAPI + ML): **Render** free web service
+- Frontend (Vite React): **Vercel** or **Netlify** free static hosting
+
+### Why split deployment?
+
+The frontend is static and deploys well on Vercel/Netlify. The backend does Python/ML inference and is more reliable as a long-running service on Render.
+
+### 1. Deploy Backend on Render
+
+1. Push your repo to GitHub.
+2. In Render, create a new **Web Service** from the repo.
+3. Configure:
+    - **Root Directory:** `shadowmap/backend`
+    - **Build Command:** `pip install -r requirements.txt`
+    - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Add environment variables:
+    - `PYTHON_VERSION=3.11`
+    - `CORS_ORIGINS=https://your-frontend-domain.vercel.app`
+      - You can add multiple origins as comma-separated values.
+5. Deploy and verify:
+    - `https://your-backend.onrender.com/api/model-info`
+    - `https://your-backend.onrender.com/api/blocks`
+
+### 2. Deploy Frontend on Vercel or Netlify
+
+1. Create a new project from the same repo.
+2. Configure:
+    - **Root Directory:** `shadowmap/frontend`
+    - **Build Command:** `npm run build`
+    - **Output Directory:** `dist`
+3. Add environment variable:
+    - `VITE_API_BASE_URL=https://your-backend.onrender.com/api`
+4. Deploy.
+
+### 3. Finalize CORS
+
+After frontend deploys, copy its real URL and update backend env var:
+
+`CORS_ORIGINS=https://your-real-frontend.vercel.app`
+
+If you use both Vercel and Netlify builds:
+
+`CORS_ORIGINS=https://your-app.vercel.app,https://your-app.netlify.app`
+
+Redeploy backend after changing env vars.
+
+### 4. Notes on Free Tiers
+
+- Render free services may sleep after inactivity (first request can be slow).
+- Vercel/Netlify free tiers are ideal for this frontend.
+- Keep `VITE_API_BASE_URL` in production; local dev still works with `/api` fallback.
+
+---
+
 ## Data Sources
 
 | Source | Data | URL |
