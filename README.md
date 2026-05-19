@@ -76,60 +76,86 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## Free Deployment (Render + Vercel/Netlify)
+## Free Deployment (Vercel + Netlify)
 
-For this stack, the easiest free deployment is:
-- Backend (FastAPI + ML): **Render** free web service
-- Frontend (Vite React): **Vercel** or **Netlify** free static hosting
+This repo is now wired for:
+- Backend (FastAPI + ML): **Vercel**
+- Frontend (Vite React): **Netlify**
 
-### Why split deployment?
+### Why this split?
 
-The frontend is static and deploys well on Vercel/Netlify. The backend does Python/ML inference and is more reliable as a long-running service on Render.
+The frontend is static and fits Netlify well. The backend is exposed as a Vercel Python function that serves the FastAPI app under `/api/*`.
 
-### 1. Deploy Backend on Render
+### 1. Deploy Backend on Vercel
 
-1. Push your repo to GitHub.
-2. In Render, create a new **Web Service** from the repo.
-3. Configure:
-    - **Root Directory:** `shadowmap/backend`
-    - **Build Command:** `pip install -r requirements.txt`
-    - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables:
+In Vercel, create a new project from this repo and set:
+
+- **Root Directory:** `shadowmap/backend`
+- **Framework Preset:** `Other`
+- **Build Command:** leave empty
+- **Output Directory:** leave empty
+- **Install Command:** `pip install -r requirements.txt`
+
+Add these environment variables:
+
+- `PYTHON_VERSION=3.11`
+- `CORS_ORIGINS=https://YOUR-NETLIFY-SITE.netlify.app`
+
+Important: the backend `requirements.txt` is now trimmed to runtime-only packages. The ONNX/export scripts are still in the repo for local use, but they are not part of the Vercel deploy bundle.
+
+If you already know the frontend URL, add it here now. If not, deploy the frontend first, then come back and update this value.
+
+The backend routes are served from:
+
+- `https://YOUR-VERCEL-BACKEND.vercel.app/api/blocks`
+- `https://YOUR-VERCEL-BACKEND.vercel.app/api/block/{block_id}`
+- `https://YOUR-VERCEL-BACKEND.vercel.app/api/whatif`
+- `https://YOUR-VERCEL-BACKEND.vercel.app/api/city-stats`
+- `https://YOUR-VERCEL-BACKEND.vercel.app/api/model-info`
+
+### 2. Deploy Frontend on Netlify
+
+In Netlify, create a new site from this repo and set:
+
+- **Base directory:** `shadowmap/frontend`
+- **Build command:** `npm run build`
+- **Publish directory:** `dist`
+
+Add this environment variable:
+
+- `VITE_API_BASE_URL=https://YOUR-VERCEL-BACKEND.vercel.app/api`
+
+The frontend code already falls back to `/api` for local development, but in Netlify you should set the full Vercel API URL above.
+
+### 3. Exact Values To Enter
+
+Use these exact fields:
+
+Backend on Vercel:
+
+- Root Directory: `shadowmap/backend`
+- Install Command: `pip install -r requirements.txt`
+- Build Command: empty
+- Output Directory: empty
+- Environment Variables:
     - `PYTHON_VERSION=3.11`
-    - `CORS_ORIGINS=https://your-frontend-domain.vercel.app`
-      - You can add multiple origins as comma-separated values.
-5. Deploy and verify:
-    - `https://your-backend.onrender.com/api/model-info`
-    - `https://your-backend.onrender.com/api/blocks`
+    - `CORS_ORIGINS=https://YOUR-NETLIFY-SITE.netlify.app`
 
-### 2. Deploy Frontend on Vercel or Netlify
+Frontend on Netlify:
 
-1. Create a new project from the same repo.
-2. Configure:
-    - **Root Directory:** `shadowmap/frontend`
-    - **Build Command:** `npm run build`
-    - **Output Directory:** `dist`
-3. Add environment variable:
-    - `VITE_API_BASE_URL=https://your-backend.onrender.com/api`
-4. Deploy.
+- Base Directory: `shadowmap/frontend`
+- Build Command: `npm run build`
+- Publish Directory: `dist`
+- Environment Variables:
+    - `VITE_API_BASE_URL=https://YOUR-VERCEL-BACKEND.vercel.app/api`
 
-### 3. Finalize CORS
+### 4. Final Step
 
-After frontend deploys, copy its real URL and update backend env var:
+After both deploys finish, make sure the backend `CORS_ORIGINS` contains the final Netlify URL exactly, then redeploy the backend once.
 
-`CORS_ORIGINS=https://your-real-frontend.vercel.app`
+The API is ready when this URL returns JSON:
 
-If you use both Vercel and Netlify builds:
-
-`CORS_ORIGINS=https://your-app.vercel.app,https://your-app.netlify.app`
-
-Redeploy backend after changing env vars.
-
-### 4. Notes on Free Tiers
-
-- Render free services may sleep after inactivity (first request can be slow).
-- Vercel/Netlify free tiers are ideal for this frontend.
-- Keep `VITE_API_BASE_URL` in production; local dev still works with `/api` fallback.
+`https://YOUR-VERCEL-BACKEND.vercel.app/api/model-info`
 
 ---
 
