@@ -132,7 +132,7 @@ export default function WhatIfPanel({ blockData }) {
     const deltaArrow = deltaTemp < 0 ? '↓' : deltaTemp > 0 ? '↑' : '→';
 
     return (
-        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-160px)]">
+        <div className="h-full overflow-y-auto p-3 sm:p-4 space-y-4">
             <div>
                 <h3 className="text-sm font-semibold text-white mb-0.5">
                     What-If Simulator
@@ -143,7 +143,7 @@ export default function WhatIfPanel({ blockData }) {
             </div>
 
             {/* Sliders */}
-            <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
                 {/* Buildings Slider */}
                 <div className="slider-container">
                     <div className="flex justify-between items-center mb-1">
@@ -214,7 +214,7 @@ export default function WhatIfPanel({ blockData }) {
 
             {/* Result Display */}
             {(result || loading) && (
-                <div className="bg-dark-600 rounded-xl p-4 border border-dark-400 panel-transition animate-fade-in">
+                <div className="bg-dark-600 rounded-xl p-4 border border-dark-400 panel-transition animate-fade-in shadow-lg shadow-black/20">
                     {loading ? (
                         <div className="flex items-center justify-center gap-2 py-3">
                             <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>

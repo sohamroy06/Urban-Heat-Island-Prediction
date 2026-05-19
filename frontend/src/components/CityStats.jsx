@@ -160,7 +160,7 @@ export default function CityStats({ onSelectBlock }) {
 
     if (loading) {
         return (
-            <div className="p-4 flex items-center gap-3">
+        <div className="p-4 flex items-center gap-3">
                 <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-sm text-gray-400">Loading city stats...</span>
             </div>
@@ -174,29 +174,29 @@ export default function CityStats({ onSelectBlock }) {
     }
 
     return (
-        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-56px)]">
+        <div className="h-full overflow-y-auto p-3 sm:p-4 space-y-4">
             {/* Header */}
             <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                     <span className="text-lg">🌆</span> Delhi UHI Overview
                 </h2>
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 gap-2">
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="stat-card">
                     <div className="text-[10px] text-gray-500">Mean LST</div>
                     <div className="text-base font-bold text-white">{cityStats.city_mean_lst}°C</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
+                <div className="stat-card">
                     <div className="text-[10px] text-gray-500">Max LST</div>
                     <div className="text-base font-bold text-red-400">{cityStats.max_lst}°C</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
+                <div className="stat-card">
                     <div className="text-[10px] text-gray-500">Min LST</div>
                     <div className="text-base font-bold text-cyan-400">{cityStats.min_lst}°C</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 glow-hot">
+                <div className="stat-card glow-hot">
                     <div className="text-[10px] text-gray-500">UHI Intensity</div>
                     <div className="text-base font-bold text-orange-400">{cityStats.uhi_intensity}°C</div>
                 </div>

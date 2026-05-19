@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 function getColor(lst) {
@@ -18,7 +19,6 @@ function Legend() {
     const map = useMap();
 
     useEffect(() => {
-        const L = window.L || require('leaflet');
         const legend = L.control({ position: 'bottomleft' });
 
         legend.onAdd = function () {
@@ -126,7 +126,7 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
     }, [selectedBlockId]);
 
     return (
-        <div className="h-full w-full relative">
+        <div className="h-full w-full relative bg-dark-900">
             <MapContainer
                 center={delhiCenter}
                 zoom={defaultZoom}
@@ -153,6 +153,13 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
                 <Legend />
                 {flyToCenter && <MapUpdater center={flyToCenter} />}
             </MapContainer>
+
+            <div className="pointer-events-none absolute left-3 top-3 z-[900] max-w-[calc(100%-1.5rem)] rounded-xl border border-dark-400 bg-dark-800/88 px-3 py-2 shadow-xl backdrop-blur sm:left-4 sm:top-4 sm:px-4">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-amber-300">Delhi Heat Index</p>
+                <p className="text-sm font-semibold text-white sm:text-base">
+                    {selectedBlockId ? `Selected ${selectedBlockId}` : '300 predicted city blocks'}
+                </p>
+            </div>
 
             {!geojsonData && (
                 <div className="absolute inset-0 flex items-center justify-center bg-dark-900/80 z-[1000]">

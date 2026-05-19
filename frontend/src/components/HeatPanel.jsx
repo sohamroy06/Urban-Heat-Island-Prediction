@@ -106,7 +106,7 @@ export default function HeatPanel({ blockData, loading }) {
     const ciHalf = (ci_width / 2).toFixed(1);
 
     return (
-        <div className="p-4 space-y-4 animate-fade-in overflow-y-auto max-h-[calc(100vh-160px)]">
+        <div className="h-full overflow-y-auto p-3 sm:p-4 space-y-4 animate-fade-in">
             {/* Block Header */}
             <div>
                 <div className="flex items-center justify-between mb-1">
@@ -121,12 +121,12 @@ export default function HeatPanel({ blockData, loading }) {
             </div>
 
             {/* Temperature Display */}
-            <div className="bg-dark-600 rounded-xl p-4 text-center border border-dark-400">
+            <div className="bg-dark-600 rounded-xl p-4 text-center border border-dark-400 shadow-lg shadow-black/20">
                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">
                     Surface Temperature
                 </p>
                 <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-white">
+                    <span className="text-3xl sm:text-4xl font-bold text-white">
                         {predicted_lst}
                     </span>
                     <span className="text-lg text-gray-400">°C</span>
@@ -161,7 +161,7 @@ export default function HeatPanel({ blockData, loading }) {
                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                     Block Features
                 </h4>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-1.5">
                     {features && Object.entries(features).map(([key, value]) => (
                         <div key={key} className="bg-dark-600 rounded px-2 py-1.5 border border-dark-400">
                             <div className="text-[10px] text-gray-500 truncate">

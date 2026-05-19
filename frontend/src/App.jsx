@@ -12,6 +12,7 @@ export default function App() {
     const [blockData, setBlockData] = useState(null);
     const [blockLoading, setBlockLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('info');
+    const [mobilePanel, setMobilePanel] = useState('stats');
     const [flyToCenter, setFlyToCenter] = useState(null);
     const [error, setError] = useState(null);
 
@@ -51,12 +52,13 @@ export default function App() {
     const handleCityStatsSelect = useCallback((blockId) => {
         handleSelectBlock(blockId);
         setActiveTab('info');
+        setMobilePanel('details');
     }, [handleSelectBlock]);
 
     if (error) {
         return (
-            <div className="h-screen bg-dark-900 flex items-center justify-center">
-                <div className="max-w-md text-center p-8">
+            <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
+                <div className="w-full max-w-md text-center p-6 sm:p-8 rounded-2xl border border-dark-400 bg-dark-700 shadow-2xl">
                     <div className="text-6xl mb-4">⚠️</div>
                     <h2 className="text-xl font-bold text-white mb-2">Connection Error</h2>
                     <p className="text-gray-400 text-sm mb-4">{error}</p>
@@ -78,17 +80,17 @@ export default function App() {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-dark-900 overflow-hidden">
+        <div className="min-h-screen lg:h-screen flex flex-col bg-dark-900 text-gray-100 lg:overflow-hidden">
             <Navbar />
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 min-h-0 lg:flex lg:overflow-hidden">
                 {/* Left Panel — City Stats (30%) */}
-                <aside className="w-[300px] min-w-[280px] bg-dark-700 border-r border-dark-400 flex-shrink-0 overflow-hidden">
+                <aside className="hidden lg:block w-[320px] xl:w-[340px] bg-dark-700/95 border-r border-dark-400 flex-shrink-0 overflow-hidden">
                     <CityStats onSelectBlock={handleCityStatsSelect} />
                 </aside>
 
                 {/* Center Panel — Map (flexible) */}
-                <main className="flex-1 relative overflow-hidden">
+                <main className="relative h-[54vh] min-h-[360px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-hidden border-b border-dark-400 lg:border-b-0">
                     <MapView
                         geojsonData={geojsonData}
                         selectedBlockId={selectedBlockId}
@@ -98,7 +100,7 @@ export default function App() {
                 </main>
 
                 {/* Right Panel — Block Info / What-If (20%) */}
-                <aside className="w-[320px] min-w-[300px] bg-dark-700 border-l border-dark-400 flex-shrink-0 flex flex-col overflow-hidden">
+                <aside className="hidden lg:flex w-[360px] xl:w-[390px] bg-dark-700/95 border-l border-dark-400 flex-shrink-0 flex-col overflow-hidden">
                     {/* Tab Buttons */}
                     <div className="flex border-b border-dark-400">
                         <button
@@ -130,6 +132,56 @@ export default function App() {
                         )}
                     </div>
                 </aside>
+
+                {/* Mobile / Tablet Panels */}
+                <section className="lg:hidden bg-dark-800 px-3 py-3 sm:px-4">
+                    <div className="sticky top-0 z-20 -mx-3 sm:-mx-4 px-3 sm:px-4 pb-3 bg-dark-800/95 backdrop-blur border-b border-dark-400">
+                        <div className="grid grid-cols-3 gap-2 rounded-xl bg-dark-700 p-1 border border-dark-400 shadow-lg">
+                            <button
+                                onClick={() => setMobilePanel('stats')}
+                                className={`mobile-tab ${mobilePanel === 'stats' ? 'mobile-tab-active' : ''}`}
+                            >
+                                City
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setMobilePanel('details');
+                                    setActiveTab('info');
+                                }}
+                                className={`mobile-tab ${mobilePanel === 'details' ? 'mobile-tab-active' : ''}`}
+                            >
+                                Block
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setMobilePanel('simulate');
+                                    setActiveTab('whatif');
+                                }}
+                                className={`mobile-tab ${mobilePanel === 'simulate' ? 'mobile-tab-active' : ''}`}
+                            >
+                                Sim
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="pt-3">
+                        {mobilePanel === 'stats' && (
+                            <div className="panel-shell">
+                                <CityStats onSelectBlock={handleCityStatsSelect} />
+                            </div>
+                        )}
+                        {mobilePanel === 'details' && (
+                            <div className="panel-shell">
+                                <HeatPanel blockData={blockData} loading={blockLoading} />
+                            </div>
+                        )}
+                        {mobilePanel === 'simulate' && (
+                            <div className="panel-shell">
+                                <WhatIfPanel blockData={blockData} />
+                            </div>
+                        )}
+                    </div>
+                </section>
             </div>
         </div>
     );
