@@ -1,251 +1,131 @@
-# ShadowMap — Urban Heat Island Prediction & What-If Simulator
+# 🌡️ ShadowMap — Delhi Urban Heat Island Simulator
 
-**Predict street-block level Urban Heat Island intensity across Delhi and simulate the impact of urban interventions in real-time.** . 
+**Predict. Visualize. Simulate.** ShadowMap is a machine-learning-powered map of Delhi that predicts surface temperature block-by-block, explains *why* each area runs hot, and lets you simulate real interventions — more trees, fewer buildings, cooler roofs — to see their impact before you build anything.
 
-Built for urban planners, municipal officers, and smart city policymakers  .
-
-----
-
-## Architecture
-
-````
-┌──────────────────────────────────────────────────────────────┐
-│                     REACT FRONTEND (Vite)                    │
-│  ┌──────────┐  ┌──────────────┐  ┌─────────────────────┐    │
-│  │CityStats │  │  MapView     │  │ HeatPanel/WhatIfPanel│    │
-│  │ Donut    │  │  Leaflet     │  │ Sliders, Charts     │    │
-│  │ Rankings │  │  Choropleth  │  │ Confidence Intervals│    │
-│  └──────────┘  └──────────────┘  └─────────────────────┘    │
-│                         │ fetch /api/*                        │
-└─────────────────────────┼────────────────────────────────────┘
-                          │
-┌─────────────────────────┼────────────────────────────────────┐
-│                   FASTAPI BACKEND                            │
-│  ┌──────────────────────┼─────────────────────────────┐      │
-│  │  /api/blocks   /api/block/{id}   /api/whatif       │      │
-│  │  /api/city-stats     /api/model-info               │      │
-│  └──────────────────────┼─────────────────────────────┘      │
-│                         │                                     │
-│  ┌─────────────┐  ┌────┴────────┐  ┌──────────────────┐     │
-│  │ data_       │  │  model.py   │  │  feature_         │     │
-│  │ pipeline.py │  │  GBR+QR     │  │  engineering.py   │     │
-│  │ OSM/Synth   │  │  What-If    │  │  StandardScaler   │     │
-│  └─────────────┘  └─────────────┘  └──────────────────┘     │
-│                         │                                     │
-│  ┌─────────────────────────────────────────────────────┐     │
-│  │  model_artifacts/  (uhi_model.pkl, scaler.pkl, etc) │     │
-│  │  sample_data.csv   delhi_blocks.geojson             │     │
-│  └─────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────┘
-```
+![Status](https://img.shields.io/badge/data-real%20satellite%20%2B%20OSM-brightgreen)
+![Model](https://img.shields.io/badge/model-XGBoost%20%2B%20Quantile%20Regression-blue)
+![Coverage](https://img.shields.io/badge/coverage-95%20Delhi%20wards-orange)
 
 ---
 
-## Quick Start
+## 🔥 What It Does
 
-### 1. Backend Setup
+Delhi's dense, paved neighborhoods run several degrees hotter than its green ones — that's the Urban Heat Island (UHI) effect. ShadowMap makes that effect visible, predictable, and *actionable*:
 
+- 🗺️ **Interactive heat map** — every ward color-coded by surface temperature, with hottest-blocks leaderboard
+- 🎯 **Block-level predictions** — surface temp with 80% confidence intervals, not just a single guess
+- 🧠 **Explainable AI** — see exactly which features (green cover, building density, road density...) are driving the heat in any given block
+- 🌳 **What-if simulator** — add trees, remove buildings, boost roof albedo, and watch predicted temperature shift in real time
+- 📊 **City-wide analytics** — mean/max/min LST, UHI intensity distribution, ward rankings
+
+---
+
+## 🛰️ Real Data, Not Guesswork
+
+Early versions of this project ran on synthetic data. **Not anymore.**
+
+| Feature | Source | Resolution |
+|---|---|---|
+| Land Surface Temperature | Landsat 8/9 (median composite, Apr–Jun) | 30m |
+| NDVI (Green Cover) | Landsat 8/9, same composite | 30m |
+| Building Density | OpenStreetMap (osmnx) | vector |
+| Road Density | OpenStreetMap (osmnx) | vector |
+| Building Height | OSM `building:levels` tags | vector |
+| Ward Boundaries | OSM admin boundaries | vector |
+| Distance to Water | Computed vs. Yamuna River | — |
+
+**Coverage:** 95 real Delhi wards, pulled live via Google Earth Engine + Overpass API — no fabricated numbers.
+
+---
+
+## 🧪 Model — Honest Metrics, No Hand-Waving
+
+XGBoost regression with quantile models for uncertainty bands (P10/P90). Because the dataset is real and modest in size, we report **multiple validation strategies** instead of cherry-picking the flattering one:
+
+| Metric | Score | What it tells you |
+|---|---|---|
+| **Repeated 5-Fold CV R²** | **0.45** (±0.16) | Most reliable estimate — real predictive signal |
+| Random-split R² | 0.37 | Single-split sanity check |
+| Spatial CV R² | -1.01 | Hardest test: generalize to *unseen* geography |
+| MAE (spatial test) | 1.8°C | Typical prediction error |
+
+> **Why the spatial score looks worse:** Delhi's west and east sides differ by ~2.2°C on average — a real geographic effect, not a model failure. We report it anyway because burying inconvenient numbers isn't science.
+
+**Top predictive features:** Green Cover (26%) → Building Density (13%) → Impervious Surface (12%) → Distance to Water (11%)
+
+A Random Forest comparison model was also benchmarked (R² = 0.48) — kept as reference, not deployed, since it can't produce the confidence intervals the app relies on.
+
+---
+
+## 🏗️ Tech Stack
+
+**Backend:** FastAPI · XGBoost · scikit-learn · GeoPandas · osmnx
+**Frontend:** React 18 · Vite · Leaflet · Recharts · TailwindCSS
+**Data Pipeline:** Google Earth Engine (Landsat) · Overpass API (OSM) · GDAL/CRS reprojection
+
+---
+
+## 🚀 Quick Start
+
+### Backend
 ```bash
-cd shadowmap/backend
-
-# Install dependencies
+cd backend
+python -m venv venv
+source venv/bin/activate       # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Train the model (generates data + trains GBR + saves artifacts)
-python train_model.py
-
-# Start the API server
 uvicorn main:app --reload --port 8000
 ```
 
-> **Note:** If you skip `train_model.py`, the server will auto-train on first startup.
-
-### 2. Frontend Setup
-
+### Frontend
 ```bash
-cd shadowmap/frontend
-
-# Install dependencies
+cd frontend
 npm install
-
-# Start the dev server
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open `http://localhost:5173` — backend must be running on port 8000 for the map to load.
 
 ---
 
-## Free Deployment (Render + Vercel/Netlify)
+## 📡 API Endpoints
 
-For this stack, the easiest free deployment is:
-- Backend (FastAPI + ML): **Render** free web service
-- Frontend (Vite React): **Vercel** or **Netlify** free static hosting
-
-### Why split deployment?
-
-The frontend is static and deploys well on Vercel/Netlify. The backend does Python/ML inference and is more reliable as a long-running service on Render.
-
-### 1. Deploy Backend on Render
-
-1. Push your repo to GitHub.
-2. In Render, create a new **Web Service** from the repo.
-3. Configure:
-    - **Root Directory:** `shadowmap/backend`
-    - **Build Command:** `pip install -r requirements.txt`
-    - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables:
-    - `PYTHON_VERSION=3.11`
-    - `CORS_ORIGINS=https://your-frontend-domain.vercel.app`
-      - You can add multiple origins as comma-separated values.
-5. Deploy and verify:
-    - `https://your-backend.onrender.com/api/model-info`
-    - `https://your-backend.onrender.com/api/blocks`
-
-### 2. Deploy Frontend on Vercel or Netlify
-
-1. Create a new project from the same repo.
-2. Configure:
-    - **Root Directory:** `shadowmap/frontend`
-    - **Build Command:** `npm run build`
-    - **Output Directory:** `dist`
-3. Add environment variable:
-    - `VITE_API_BASE_URL=https://your-backend.onrender.com/api`
-4. Deploy.
-
-### 3. Finalize CORS
-
-After frontend deploys, copy its real URL and update backend env var:
-
-`CORS_ORIGINS=https://your-real-frontend.vercel.app`
-
-If you use both Vercel and Netlify builds:
-
-`CORS_ORIGINS=https://your-app.vercel.app,https://your-app.netlify.app`
-
-Redeploy backend after changing env vars.
-
-### 4. Notes on Free Tiers
-
-- Render free services may sleep after inactivity (first request can be slow).
-- Vercel/Netlify free tiers are ideal for this frontend.
-- Keep `VITE_API_BASE_URL` in production; local dev still works with `/api` fallback.
+| Endpoint | Returns |
+|---|---|
+| `GET /api/blocks` | All ward predictions with features |
+| `GET /api/block/{block_id}` | Single block detail + feature contributions |
+| `GET /api/city-stats` | City-wide temperature statistics |
+| `GET /api/model-info` | Full model metrics, feature importances, training summary |
 
 ---
 
-## Data Sources
+## 🔄 Rebuilding the Data Pipeline
 
-| Source | Data | URL |
-|--------|------|-----|
-| OpenStreetMap | Building footprints, road network | https://www.openstreetmap.org |
-| Sentinel-3 SLSTR | Land Surface Temperature (LST) | https://scihub.copernicus.eu |
-| Landsat 8/9 | NDVI (vegetation index) | https://earthexplorer.usgs.gov |
-| osmnx | Automated OSM data download | https://github.com/gboeing/osmnx |
+Want to refresh with newer satellite passes or extend coverage?
 
-### Downloading Real Data
+1. `get_wards.py` — pull ward boundaries from OSM
+2. `fetch_lst_v3.py` — single-composite Landsat LST + NDVI (avoids date-mismatch noise)
+3. `fetch_density_v3.py` — building/road density via osmnx (rate-limit resilient, resumable)
+4. `fetch_heights.py` — building heights from OSM tags where available
+5. `merge_final_v2.py` — assembles everything into `sample_data.csv`
+6. `train_model.py` — trains mean + quantile models, logs all validation metrics
 
-1. **Sentinel-3 LST:** Register at Copernicus Open Access Hub, search for "SL_2_LST" over Delhi (May-June), download the NetCDF, and place the resampled GeoTIFF in `backend/`.
-2. **Landsat NDVI:** Use Google Earth Engine or USGS EarthExplorer to get cloud-free Landsat 8/9 imagery for Delhi. Compute NDVI = (NIR - Red) / (NIR + Red), export as GeoTIFF.
-3. **Fallback:** The app works end-to-end with synthetic data that realistically models Delhi's urban landscape (~300 blocks).
+> **Heads up:** Overpass API rate-limits aggressively. Scripts are built to resume from where they left off — just rerun if interrupted.
 
 ---
 
-## How to Retrain the Model
+## 🎯 Roadmap
 
-```bash
-cd shadowmap/backend
-
-# Option 1: With existing data
-python train_model.py
-
-# Option 2: Regenerate synthetic data first
-python -c "from data_pipeline import generate_synthetic_data; df = generate_synthetic_data(500); df.to_csv('sample_data.csv', index=False)"
-python train_model.py
-```
-
-Artifacts are saved to `backend/model_artifacts/`:
-- `uhi_model.pkl` — Mean prediction model
-- `uhi_model_lower.pkl` — 10th percentile quantile model
-- `uhi_model_upper.pkl` — 90th percentile quantile model
-- `scaler.pkl` — StandardScaler for feature normalization
-- `metrics.json` — Performance metrics
-- `feature_importance.json` — Feature importance percentages
+- [ ] Expand ward coverage beyond the current 95 (address the ~6 wards with no OSM building/road data)
+- [ ] Multi-season LST composites (currently single Apr–Jun window)
+- [ ] Sentinel-2 NDVI (10m) for finer green-cover resolution
+- [ ] Real ward names for the "Unknown" fallback cases
 
 ---
 
-## Methodology
+## 🤝 Contributing
 
-### Urban Heat Islands (UHI)
-
-Urban Heat Islands are metropolitan areas significantly warmer than surrounding rural areas due to human activities. Factors include:
-- **Building density:** Concrete and steel absorb and re-emit heat
-- **Vegetation loss:** Reduced evapotranspiration cooling
-- **Impervious surfaces:** Roads and parking lots store thermal energy
-- **Waste heat:** Air conditioning, vehicles, industrial processes
-
-### Why Gradient Boosting Regressor (GBR)?
-
-GBR was chosen for several reasons:
-1. **Non-linear relationships:** UHI relationships are inherently non-linear (e.g., vegetation cooling has diminishing returns)
-2. **Feature interactions:** GBR naturally captures interactions between building density, green cover, and road density
-3. **Robustness:** Handles missing values and outliers well
-4. **Interpretability:** Feature importance scores provide actionable insights for urban planners
-5. **Quantile regression:** GBR supports quantile loss for confidence interval estimation
-
-### Spatial Cross-Validation
-
-Standard random cross-validation leaks spatial information between train and test sets because adjacent blocks have correlated features and temperatures. Our approach:
-1. **Spatial split:** Western Delhi (training) vs. Eastern Delhi (testing)
-2. **Spatial CV:** Blocks sorted by longitude, split into 5 folds without shuffling
-3. This ensures the model generalizes to unseen geographic areas
-
-### Quantile Regression for Confidence Intervals
-
-Instead of just a mean prediction, we train three models:
-- **Mean model:** `GradientBoostingRegressor(loss='squared_error')` — point estimate
-- **Lower bound:** `GradientBoostingRegressor(loss='quantile', alpha=0.1)` — 10th percentile
-- **Upper bound:** `GradientBoostingRegressor(loss='quantile', alpha=0.9)` — 90th percentile
-
-This gives an 80% prediction interval, showing uncertainty in each block's temperature prediction.
+Built by students, for a real city problem. PRs welcome — especially on data coverage, model robustness, or frontend polish.
 
 ---
 
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/blocks` | GeoJSON of all blocks with predictions |
-| GET | `/api/block/{block_id}` | Detailed block info with feature contributions |
-| POST | `/api/whatif` | What-if simulation with intervention parameters |
-| GET | `/api/city-stats` | City-wide statistics and rankings |
-| GET | `/api/model-info` | Model performance metrics and feature importances |
-
----
-
-## Features
-
-- 🗺️ **Interactive Choropleth Map** — Blue-to-red heat scale across 300 Delhi blocks
-- 🌡️ **Block-Level Predictions** — Surface temperature with 80% confidence intervals
-- 🔬 **What-If Simulator** — Add buildings, plant trees, or change roof albedo
-- 📊 **Feature Contributions** — See what drives each block's temperature
-- 🏆 **City Rankings** — Top 5 hottest and coolest blocks at a glance
-- 📈 **Intervention Curves** — Visualize how temperature changes with each intervention
-- 🌙 **Dark Theme** — Premium dark UI optimized for desktop
-
----
-
-## Screenshots
-
-*Screenshots will be added after deployment.*
-
----
-
-## Team
-
-*Team information placeholder.*
-
----
-
-## License
-
-This project is for educational and research purposes.
+*ShadowMap doesn't just show you where it's hot — it shows you why, and what you can do about it.*
