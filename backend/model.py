@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split as sk_train_test_split
 
 from feature_engineering import (
     ALL_FEATURES,
@@ -138,14 +138,14 @@ def train_model(df: pd.DataFrame):
     y_train, y_test = y[train_idx], y[test_idx]
 
     best_params = {
-        "n_estimators": 300,
-        "max_depth": 4,
-        "learning_rate": 0.1,
-        "min_child_weight": 5,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "reg_alpha": 0.1,
-        "reg_lambda": 1.0,
+        "n_estimators": 100,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "min_child_weight": 10,
+        "subsample": 0.7,
+        "colsample_bytree": 0.7,
+        "reg_alpha": 1.0,
+        "reg_lambda": 3.0,
     }
 
     print(f"\n[INFO] Training mean model (CPU, n_jobs=-1)...")
@@ -203,6 +203,46 @@ def train_model(df: pd.DataFrame):
 
     spatial_cv_score = spatial_cross_validation(X, y, df)
 
+
+    # --- Repeated K-Fold CV diagnostic (most reliable estimate, small-sample robust) ---
+    from sklearn.model_selection import RepeatedKFold, cross_val_score
+    rkf = RepeatedKFold(n_splits=5, n_repeats=10, random_state=42)
+    rkf_model = xgb.XGBRegressor(
+        **best_params,
+        objective="reg:squarederror",
+        tree_method="hist",
+        n_jobs=-1,
+        random_state=42,
+        verbosity=0,
+    )
+    rkf_scores = cross_val_score(rkf_model, X, y, cv=rkf, scoring="r2")
+    rkf_r2_mean = float(rkf_scores.mean())
+    rkf_r2_std = float(rkf_scores.std())
+
+    print(f"\n[INFO] Repeated 5-fold CV diagnostic (50 runs, most stable estimate):")
+    print(f"  Mean R2: {rkf_r2_mean:.4f} (+/- {rkf_r2_std:.4f})")
+
+    # --- Random-split diagnostic (secondary metric, not used for deployed model) ---
+    X_train_r, X_test_r, y_train_r, y_test_r = sk_train_test_split(
+        X, y, test_size=0.3, random_state=42
+    )
+    random_model = xgb.XGBRegressor(
+        **best_params,
+        objective="reg:squarederror",
+        tree_method="hist",
+        n_jobs=-1,
+        random_state=42,
+        verbosity=0,
+    )
+    random_model.fit(X_train_r, y_train_r, verbose=False)
+    y_pred_r = random_model.predict(X_test_r)
+    random_r2 = float(r2_score(y_test_r, y_pred_r))
+    random_mae = float(mean_absolute_error(y_test_r, y_pred_r))
+
+    print(f"\n[INFO] Random-split diagnostic (secondary, robustness check):")
+    print(f"  Random-split R2:  {random_r2:.4f}")
+    print(f"  Random-split MAE: {random_mae:.4f}C")
+
     # Feature importance from XGBoost (gain-based)
     importances = mean_model.feature_importances_
     feature_importance = {}
@@ -219,6 +259,10 @@ def train_model(df: pd.DataFrame):
         "mae": round(mae, 4),
         "r2": round(r2, 4),
         "spatial_cv_r2": round(spatial_cv_score, 4),
+        "random_split_r2": round(random_r2, 4),
+        "random_split_mae": round(random_mae, 4),
+	"repeated_cv_r2_mean": round(rkf_r2_mean, 4),
+        "repeated_cv_r2_std": round(rkf_r2_std, 4),
         "best_params": best_params,
         "n_train": len(train_idx),
         "n_test": len(test_idx),

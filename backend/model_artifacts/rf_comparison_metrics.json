@@ -1,0 +1,16 @@
+{
+  "model_type": "RandomForestRegressor",
+  "purpose": "Comparison/reference model, not used in production API",
+  "repeated_cv_r2_mean": 0.4829,
+  "repeated_cv_r2_std": 0.1467,
+  "feature_importances": {
+    "building_density": 0.0597,
+    "green_cover": 0.2414,
+    "road_density": 0.0238,
+    "avg_building_height": 0.0212,
+    "distance_to_water": 0.1069,
+    "impervious_surface_fraction": 0.0384,
+    "heat_stress_index": 0.0295,
+    "cooling_potential": 0.4791
+  }
+}

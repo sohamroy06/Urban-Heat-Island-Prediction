@@ -1,10 +1,10 @@
 {
-  "building_density": 9.11,
-  "green_cover": 1.12,
-  "road_density": 1.92,
-  "avg_building_height": 1.17,
-  "distance_to_water": 0.51,
-  "impervious_surface_fraction": 41.52,
-  "heat_stress_index": 43.97,
-  "cooling_potential": 0.69
+  "building_density": 9.94,
+  "green_cover": 20.43,
+  "road_density": 13.5,
+  "avg_building_height": 0.0,
+  "distance_to_water": 14.25,
+  "impervious_surface_fraction": 14.42,
+  "heat_stress_index": 11.51,
+  "cooling_potential": 15.95
 }
