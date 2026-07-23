@@ -9,3 +9,4 @@ onnx
 onnxruntime
 onnxmltools
 skl2onnx
+pydantic

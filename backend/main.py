@@ -19,6 +19,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -49,20 +50,31 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_cors_origins():
-    """Load allowed CORS origins from env, with localhost defaults for dev."""
-    configured = os.getenv("CORS_ORIGINS", "").strip()
-    if configured:
-        origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
-        if origins:
-            return origins
-
-    return [
+    """Load allowed CORS origins from env, with localhost defaults for dev.
+    
+    In production, set CORS_ORIGINS to your deployed frontend URL(s).
+    Example: CORS_ORIGINS=https://shadowmap.vercel.app,https://shadowmap-frontend.vercel.app
+    """
+    origins = [
         "http://localhost:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://localhost:3000",
     ]
+
+    configured = os.getenv("CORS_ORIGINS", "").strip()
+    if configured:
+        extra = [o.strip() for o in configured.split(",") if o.strip()]
+        origins.extend(extra)
+
+    return origins
+
+
+def get_cors_origin_regex():
+    """Return regex pattern for Vercel preview deployment URLs."""
+    # Matches any *.vercel.app preview deployment
+    return r"https://.*\.vercel\.app"
 
 
 def load_or_train():
@@ -74,11 +86,17 @@ def load_or_train():
     if os.path.exists(csv_path):
         print("[STARTUP] Loading data from sample_data.csv")
         df = pd.read_csv(csv_path)
+        print(f"[STARTUP] Data source: REAL ({len(df)} blocks)")
     else:
-        print("[STARTUP] Generating synthetic data...")
-        df = generate_synthetic_data(n_blocks=300)
-        df.to_csv(csv_path, index=False)
-        print(f"[STARTUP] Saved {len(df)} blocks to {csv_path}")
+        if os.getenv('USE_SYNTHETIC_FALLBACK', 'false').lower() == 'true':
+            print("[STARTUP] Generating synthetic data...")
+            print("[WARNING] Synthetic fallback is active!")
+            df = generate_synthetic_data(n_blocks=300)
+            df.to_csv(csv_path, index=False)
+            print(f"[STARTUP] Saved {len(df)} blocks to {csv_path}")
+            print(f"[STARTUP] Data source: SYNTHETIC FALLBACK ({len(df)} blocks)")
+        else:
+            raise RuntimeError("Real data is missing and the synthetic fallback is disabled. Set USE_SYNTHETIC_FALLBACK=true to enable it.")
 
     if not os.path.exists(geojson_path):
         print("[STARTUP] Generating GeoJSON...")
@@ -232,9 +250,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),
+    allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "Authorization"],
 )
 
 
@@ -247,11 +266,44 @@ class WhatIfRequest(BaseModel):
 
 
 @app.get("/api/blocks")
-async def get_blocks():
+async def get_blocks(source: Optional[str] = None):
     """
     Returns GeoJSON of all Delhi blocks with predicted UHI scores,
     confidence intervals, and feature values for choropleth rendering.
     """
+    if source == "synthetic":
+        synth_df = generate_synthetic_data(n_blocks=300)
+        synth_geojson_path = os.path.join(BASE_DIR, "temp_synthetic_blocks.geojson")
+        generate_geojson(synth_df, synth_geojson_path)
+        with open(synth_geojson_path, "r", encoding="utf-8") as f:
+            synth_geojson = json.load(f)
+        
+        synth_batch_features = synth_df[FEATURE_COLUMNS].copy()
+        synth_results = predict_batch(synth_batch_features, app_state["models"])
+        
+        synth_predictions = {}
+        for i, (_, row) in enumerate(synth_df.iterrows()):
+            block_id = row["block_id"]
+            synth_predictions[block_id] = {
+                "predicted_lst": float(synth_results.iloc[i]["predicted_lst"]),
+                "ci_lower": float(synth_results.iloc[i]["ci_lower"]),
+                "ci_upper": float(synth_results.iloc[i]["ci_upper"]),
+                "ci_width": float(synth_results.iloc[i]["ci_width"]),
+            }
+            
+        for feature in synth_geojson["features"]:
+            block_id = feature["properties"]["block_id"]
+            if block_id in synth_predictions:
+                feature["properties"]["predicted_lst"] = synth_predictions[block_id]["predicted_lst"]
+                feature["properties"]["ci_lower"] = synth_predictions[block_id]["ci_lower"]
+                feature["properties"]["ci_upper"] = synth_predictions[block_id]["ci_upper"]
+                feature["properties"]["ci_width"] = synth_predictions[block_id]["ci_width"]
+                
+        if os.path.exists(synth_geojson_path):
+            os.remove(synth_geojson_path)
+            
+        return synth_geojson
+
     if app_state["geojson"] is None:
         raise HTTPException(status_code=503, detail="Data not loaded yet")
     return app_state["geojson"]
