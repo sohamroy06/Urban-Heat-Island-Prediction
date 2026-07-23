@@ -1,67 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import {
-    PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
-} from 'recharts';
 import { fetchCityStats, fetchModelInfo } from '../api/shadowmap';
-
-const RISK_COLORS = {
-    critical: '#ef4444',
-    hot: '#f97316',
-    moderate: '#eab308',
-    cool: '#06b6d4',
-};
 
 function DonutChart({ categories }) {
     if (!categories) return null;
 
-    const data = [
-        { name: 'Critical', value: categories.critical.count, color: RISK_COLORS.critical },
-        { name: 'Hot', value: categories.hot.count, color: RISK_COLORS.hot },
-        { name: 'Moderate', value: categories.moderate.count, color: RISK_COLORS.moderate },
-        { name: 'Cool', value: categories.cool.count, color: RISK_COLORS.cool },
-    ].filter(d => d.value > 0);
+    const counts = [
+        { name: 'Critical', value: categories.critical.count, color: 'var(--tw-colors-error, #ffb4ab)', bg: 'bg-error' },
+        { name: 'Hot', value: categories.hot.count, color: 'var(--tw-colors-primary-container, #f59e0b)', bg: 'bg-primary-container' },
+        { name: 'Moderate', value: categories.moderate.count, color: 'var(--tw-colors-primary, #ffc174)', bg: 'bg-primary' },
+        { name: 'Cool', value: categories.cool.count, color: 'var(--tw-colors-secondary, #4edea3)', bg: 'bg-secondary' },
+    ];
+
+    const total = counts.reduce((acc, curr) => acc + curr.value, 0);
+    
+    let currentPercent = 0;
+    const gradientStops = counts.map(item => {
+        if (total === 0) return '';
+        const pct = (item.value / total) * 100;
+        const stop = `${item.color} ${currentPercent}% ${currentPercent + pct}%`;
+        currentPercent += pct;
+        return stop;
+    }).filter(Boolean).join(', ');
 
     return (
-        <div className="relative">
-            <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                    <Pie
-                        data={data}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={45}
-                        outerRadius={65}
-                        paddingAngle={3}
-                        dataKey="value"
-                        startAngle={90}
-                        endAngle={-270}
-                    >
-                        {data.map((entry, idx) => (
-                            <Cell key={idx} fill={entry.color} stroke="none" />
-                        ))}
-                    </Pie>
-                    <Tooltip
-                        contentStyle={{
-                            background: '#1a1d27',
-                            border: '1px solid #363c50',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            color: '#e2e8f0',
-                        }}
-                        formatter={(val, name) => [`${val} blocks`, name]}
-                    />
-                </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1">
-                {data.map((d) => (
+        <div className="w-full h-48 flex items-center justify-center relative my-4">
+            <div 
+                className="w-32 h-32 rounded-full relative" 
+                style={{ background: `conic-gradient(${gradientStops || '#333539 0% 100%'})` }}
+            >
+                <div className="absolute inset-[18px] bg-surface-container-low rounded-full"></div>
+            </div>
+            
+            <div className="absolute bottom-[-20px] w-full flex justify-center gap-4">
+                {counts.filter(d => d.value > 0).map((d) => (
                     <div key={d.name} className="flex items-center gap-1.5">
-                        <span
-                            className="inline-block w-2 h-2 rounded-full"
-                            style={{ backgroundColor: d.color }}
-                        ></span>
-                        <span className="text-[10px] text-gray-400">
-                            {d.name} ({d.value})
-                        </span>
+                        <div className={`w-2 h-2 rounded-full ${d.bg}`}></div>
+                        <span className="font-label-caps text-label-caps text-on-surface-variant text-[9px]">{d.name}</span>
                     </div>
                 ))}
             </div>
@@ -76,58 +50,56 @@ function ModelInfoPanel({ modelInfo }) {
     const sorted = Object.entries(importances).sort((a, b) => b[1] - a[1]);
 
     return (
-        <div className="space-y-3 animate-fade-in">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <div className="space-y-4 animate-fade-in mt-4">
+            <h4 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
                 Model Performance
             </h4>
             <div className="grid grid-cols-2 gap-2">
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 text-center">
-                    <div className="text-[10px] text-gray-500">R² Score</div>
-                    <div className="text-sm font-bold text-emerald-400">{modelInfo.r2?.toFixed(3)}</div>
+                <div className="bg-surface-container rounded-lg p-3 border border-white/5 text-center">
+                    <div className="font-label-caps text-label-caps text-on-surface-variant mb-1">R² Score</div>
+                    <div className="font-numeric-data text-numeric-data text-secondary text-[16px]">{modelInfo.r2?.toFixed(3)}</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 text-center">
-                    <div className="text-[10px] text-gray-500">RMSE</div>
-                    <div className="text-sm font-bold text-amber-400">{modelInfo.rmse?.toFixed(2)}°C</div>
+                <div className="bg-surface-container rounded-lg p-3 border border-white/5 text-center">
+                    <div className="font-label-caps text-label-caps text-on-surface-variant mb-1">RMSE</div>
+                    <div className="font-numeric-data text-numeric-data text-primary text-[16px]">{modelInfo.rmse?.toFixed(2)}°C</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 text-center">
-                    <div className="text-[10px] text-gray-500">MAE</div>
-                    <div className="text-sm font-bold text-cyan-400">{modelInfo.mae?.toFixed(2)}°C</div>
+                <div className="bg-surface-container rounded-lg p-3 border border-white/5 text-center">
+                    <div className="font-label-caps text-label-caps text-on-surface-variant mb-1">MAE</div>
+                    <div className="font-numeric-data text-numeric-data text-tertiary text-[16px]">{modelInfo.mae?.toFixed(2)}°C</div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 text-center">
-                    <div className="text-[10px] text-gray-500">Spatial CV R²</div>
-                    <div className="text-sm font-bold text-purple-400">{modelInfo.spatial_cv_r2?.toFixed(3)}</div>
+                <div className="bg-surface-container rounded-lg p-3 border border-white/5 text-center">
+                    <div className="font-label-caps text-label-caps text-on-surface-variant mb-1">Spatial CV R²</div>
+                    <div className="font-numeric-data text-numeric-data text-primary-container text-[16px]">{modelInfo.spatial_cv_r2?.toFixed(3)}</div>
                 </div>
             </div>
 
             <div>
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                <h4 className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-3">
                     Feature Importance
                 </h4>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                     {sorted.map(([feature, pct]) => (
-                        <div key={feature} className="flex items-center gap-2">
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between mb-0.5">
-                                    <span className="text-[10px] text-gray-400 truncate">
-                                        {feature.replace(/_/g, ' ')}
-                                    </span>
-                                    <span className="text-[10px] text-gray-500 font-mono">
-                                        {pct.toFixed(1)}%
-                                    </span>
-                                </div>
-                                <div className="h-1.5 bg-dark-400 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-500"
-                                        style={{ width: `${Math.min(pct, 100)}%` }}
-                                    ></div>
-                                </div>
+                        <div key={feature} className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                                <span className="font-body-md text-[11px] text-on-surface-variant truncate">
+                                    {feature.replace(/_/g, ' ')}
+                                </span>
+                                <span className="font-numeric-data text-[11px] text-on-surface-variant">
+                                    {pct.toFixed(1)}%
+                                </span>
+                            </div>
+                            <div className="h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                                <div
+                                    className="h-full rounded-full bg-primary transition-all duration-500"
+                                    style={{ width: `${Math.min(pct, 100)}%` }}
+                                ></div>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            <div className="text-[10px] text-gray-600 pt-1 border-t border-dark-400">
+            <div className="font-label-caps text-label-caps text-on-surface-variant pt-2 border-t border-white/5 opacity-60">
                 Model: {modelInfo.model_type} | Train: {modelInfo.n_train} | Test: {modelInfo.n_test}
             </div>
         </div>
@@ -160,121 +132,123 @@ export default function CityStats({ onSelectBlock }) {
 
     if (loading) {
         return (
-            <div className="p-4 flex items-center gap-3">
-                <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm text-gray-400">Loading city stats...</span>
+            <div className="p-card-padding flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <span className="font-body-md text-on-surface-variant">Loading city stats...</span>
             </div>
         );
     }
 
     if (!cityStats) {
         return (
-            <div className="p-4 text-sm text-gray-500">Failed to load city statistics.</div>
+            <div className="p-card-padding font-body-md text-on-surface-variant">Failed to load city statistics.</div>
         );
     }
 
     return (
-        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-56px)]">
+        <div className="p-card-padding flex flex-col gap-8 h-full">
             {/* Header */}
-            <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span className="text-lg">🌆</span> Delhi UHI Overview
-                </h2>
+            <div className="flex items-center gap-3 shrink-0">
+                <span className="material-symbols-outlined text-tertiary-container" style={{ fontVariationSettings: "'FILL' 1" }}>domain</span>
+                <h2 className="font-headline-md text-headline-md text-on-surface">Delhi UHI Overview</h2>
             </div>
 
-            {/* Summary Stats */}
-            <div className="grid grid-cols-2 gap-2">
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
-                    <div className="text-[10px] text-gray-500">Mean LST</div>
-                    <div className="text-base font-bold text-white">{cityStats.city_mean_lst}°C</div>
+            <div className="flex-1 overflow-y-auto pr-2 pb-6">
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-surface-container rounded-lg p-5 border border-white/5 flex flex-col gap-2 hover:bg-surface-container-high transition-colors">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant">Mean LST</span>
+                        <span className="font-numeric-data text-numeric-data text-on-surface text-[24px]">{cityStats.city_mean_lst}°C</span>
+                    </div>
+                    <div className="bg-surface-container rounded-lg p-5 border border-white/5 flex flex-col gap-2 hover:bg-surface-container-high transition-colors">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant">Max LST</span>
+                        <span className="font-numeric-data text-numeric-data text-error text-[24px]">{cityStats.max_lst}°C</span>
+                    </div>
+                    <div className="bg-surface-container rounded-lg p-5 border border-white/5 flex flex-col gap-2 hover:bg-surface-container-high transition-colors">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant">Min LST</span>
+                        <span className="font-numeric-data text-numeric-data text-secondary text-[24px]">{cityStats.min_lst}°C</span>
+                    </div>
+                    <div className="bg-surface-container rounded-lg p-5 border border-white/5 flex flex-col gap-2 hover:bg-surface-container-high transition-colors">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant">UHI Intensity</span>
+                        <span className="font-numeric-data text-numeric-data text-primary text-[24px]">{cityStats.uhi_intensity}°C</span>
+                    </div>
                 </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
-                    <div className="text-[10px] text-gray-500">Max LST</div>
-                    <div className="text-base font-bold text-red-400">{cityStats.max_lst}°C</div>
-                </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400">
-                    <div className="text-[10px] text-gray-500">Min LST</div>
-                    <div className="text-base font-bold text-cyan-400">{cityStats.min_lst}°C</div>
-                </div>
-                <div className="bg-dark-600 rounded-lg px-3 py-2 border border-dark-400 glow-hot">
-                    <div className="text-[10px] text-gray-500">UHI Intensity</div>
-                    <div className="text-base font-bold text-orange-400">{cityStats.uhi_intensity}°C</div>
-                </div>
-            </div>
 
-            {/* Category Donut */}
-            <DonutChart categories={cityStats.categories} />
+                {/* Category Donut */}
+                <div className="my-8">
+                    <DonutChart categories={cityStats.categories} />
+                </div>
 
-            {/* Top 5 Hottest */}
-            <div>
-                <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <span>🔥</span> Top 5 Hottest Blocks
-                </h4>
-                <div className="space-y-1">
-                    {cityStats.top5_hottest?.map((block, idx) => (
-                        <button
-                            key={block.block_id}
-                            onClick={() => onSelectBlock && onSelectBlock(block.block_id)}
-                            className="w-full flex items-center justify-between bg-dark-600 hover:bg-dark-500 rounded-lg px-3 py-2 border border-dark-400 transition-colors cursor-pointer text-left"
-                        >
-                            <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs font-bold text-red-400 w-4">#{idx + 1}</span>
-                                <div className="min-w-0">
-                                    <p className="text-xs text-gray-200 truncate">{block.block_name}</p>
-                                    <p className="text-[9px] text-gray-500">{block.ward}</p>
+                {/* Top 5 Hottest */}
+                <div className="flex flex-col gap-4 mt-6">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-error text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+                        <h3 className="font-label-caps text-label-caps text-error uppercase tracking-widest">Top 5 Hottest Blocks</h3>
+                    </div>
+                    <div className="flex flex-col">
+                        {cityStats.top5_hottest?.map((block, idx) => (
+                            <div 
+                                key={block.block_id} 
+                                onClick={() => onSelectBlock && onSelectBlock(block.block_id)}
+                                className="flex items-center justify-between py-3 border-b border-white/5 group hover:bg-white/[0.02] transition-colors rounded-md px-2 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className={`font-numeric-data text-numeric-data text-error text-[14px] ${idx > 0 ? `opacity-${100 - idx * 10}` : ''}`}>#{idx + 1}</span>
+                                    <div className="flex flex-col">
+                                        <span className="font-body-md text-body-md text-on-surface text-[13px]">{block.block_name}</span>
+                                        <span className="font-body-md text-body-md text-on-surface-variant text-[11px]">{block.ward}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className={`font-numeric-data text-numeric-data text-error text-[14px] ${idx > 0 ? `opacity-${100 - idx * 10}` : ''}`}>{block.predicted_lst}°C</span>
                                 </div>
                             </div>
-                            <div className="text-right flex-shrink-0 ml-2">
-                                <p className="text-xs font-bold text-red-400">{block.predicted_lst}°C</p>
-                                <p className="text-[8px] text-gray-600">{block.ci_lower}–{block.ci_upper}</p>
-                            </div>
-                        </button>
-                    ))}
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            {/* Top 5 Coolest */}
-            <div>
-                <h4 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <span>❄️</span> Top 5 Coolest Blocks
-                </h4>
-                <div className="space-y-1">
-                    {cityStats.top5_coolest?.map((block, idx) => (
-                        <button
-                            key={block.block_id}
-                            onClick={() => onSelectBlock && onSelectBlock(block.block_id)}
-                            className="w-full flex items-center justify-between bg-dark-600 hover:bg-dark-500 rounded-lg px-3 py-2 border border-dark-400 transition-colors cursor-pointer text-left"
-                        >
-                            <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs font-bold text-cyan-400 w-4">#{idx + 1}</span>
-                                <div className="min-w-0">
-                                    <p className="text-xs text-gray-200 truncate">{block.block_name}</p>
-                                    <p className="text-[9px] text-gray-500">{block.ward}</p>
+                {/* Top 5 Coolest */}
+                <div className="flex flex-col gap-4 mt-8">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-secondary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>ac_unit</span>
+                        <h3 className="font-label-caps text-label-caps text-secondary uppercase tracking-widest">Top 5 Coolest Blocks</h3>
+                    </div>
+                    <div className="flex flex-col">
+                        {cityStats.top5_coolest?.map((block, idx) => (
+                            <div 
+                                key={block.block_id} 
+                                onClick={() => onSelectBlock && onSelectBlock(block.block_id)}
+                                className="flex items-center justify-between py-3 border-b border-white/5 group hover:bg-white/[0.02] transition-colors rounded-md px-2 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className={`font-numeric-data text-numeric-data text-secondary text-[14px] ${idx > 0 ? `opacity-${100 - idx * 10}` : ''}`}>#{idx + 1}</span>
+                                    <div className="flex flex-col">
+                                        <span className="font-body-md text-body-md text-on-surface text-[13px]">{block.block_name}</span>
+                                        <span className="font-body-md text-body-md text-on-surface-variant text-[11px]">{block.ward}</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className={`font-numeric-data text-numeric-data text-secondary text-[14px] ${idx > 0 ? `opacity-${100 - idx * 10}` : ''}`}>{block.predicted_lst}°C</span>
                                 </div>
                             </div>
-                            <div className="text-right flex-shrink-0 ml-2">
-                                <p className="text-xs font-bold text-cyan-400">{block.predicted_lst}°C</p>
-                                <p className="text-[8px] text-gray-600">{block.ci_lower}–{block.ci_upper}</p>
-                            </div>
-                        </button>
-                    ))}
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            {/* Model Info Toggle */}
-            <div className="border-t border-dark-400 pt-3">
-                <button
-                    onClick={() => setShowModel(!showModel)}
-                    className="w-full flex items-center justify-between text-xs text-gray-400 hover:text-gray-200 transition-colors py-1"
-                >
-                    <span className="font-semibold uppercase tracking-wider">
-                        {showModel ? '▼' : '▶'} Model Info
-                    </span>
-                    <span className="text-[10px] text-gray-600">
-                        R²: {modelInfo?.r2?.toFixed(3)}
-                    </span>
-                </button>
-                {showModel && <div className="mt-3"><ModelInfoPanel modelInfo={modelInfo} /></div>}
+                {/* Model Info Toggle */}
+                <div className="mt-8 pt-4 border-t border-white/5">
+                    <button
+                        onClick={() => setShowModel(!showModel)}
+                        className="w-full flex items-center justify-between font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors py-2"
+                    >
+                        <span className="uppercase tracking-widest flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[14px]">{showModel ? 'expand_less' : 'expand_more'}</span>
+                            Model Info
+                        </span>
+                        <span>R²: {modelInfo?.r2?.toFixed(3)}</span>
+                    </button>
+                    {showModel && <ModelInfoPanel modelInfo={modelInfo} />}
+                </div>
             </div>
         </div>
     );

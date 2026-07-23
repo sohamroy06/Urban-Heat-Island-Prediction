@@ -9,9 +9,8 @@
 }
 
 body {
-  background-color: #0f1117;
-  color: #e2e8f0;
-  font-family: 'Inter', system-ui, sans-serif;
+  background-color: theme('colors.surface');
+  color: theme('colors.on-surface');
   overflow: hidden;
   height: 100vh;
 }
@@ -19,27 +18,30 @@ body {
 #root {
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #14161e;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #363c50;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a5168;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .leaflet-container {
-  background: #0f1117 !important;
+  background: theme('colors.surface-container-lowest') !important;
   height: 100%;
   width: 100%;
 }
@@ -49,41 +51,33 @@ body {
 }
 
 .leaflet-control-zoom a {
-  background-color: #1a1d27 !important;
-  color: #e2e8f0 !important;
-  border-color: #363c50 !important;
+  background-color: theme('colors.surface-container') !important;
+  color: theme('colors.on-surface') !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background-color: #222633 !important;
+  background-color: theme('colors.surface-container-high') !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: #1a1d27 !important;
-  color: #e2e8f0 !important;
+  background: theme('colors.surface-container-high') !important;
+  color: theme('colors.on-surface') !important;
   border-radius: 8px !important;
-  border: 1px solid #363c50;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
 }
 
 .leaflet-popup-tip {
-  background: #1a1d27 !important;
+  background: theme('colors.surface-container-high') !important;
 }
 
 .leaflet-popup-close-button {
-  color: #94a3b8 !important;
+  color: theme('colors.on-surface-variant') !important;
 }
 
 .panel-transition {
   transition: all 200ms ease-in-out;
-}
-
-.glow-hot {
-  box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
-}
-
-.glow-cool {
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
 }
 
 @keyframes fadeIn {
@@ -95,21 +89,12 @@ body {
   animation: fadeIn 200ms ease-out;
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(249, 115, 22, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.5); }
-}
-
-.pulse-hot {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
 .slider-container input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 6px;
-  border-radius: 3px;
-  background: #363c50;
+  height: 4px;
+  border-radius: 2px;
+  background: theme('colors.surface-container-highest');
   outline: none;
   width: 100%;
 }
@@ -120,7 +105,7 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: theme('colors.primary');
   cursor: pointer;
   transition: transform 150ms;
 }
@@ -138,7 +123,7 @@ body {
   letter-spacing: 0.05em;
 }
 
-.risk-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); }
-.risk-hot { background: rgba(249, 115, 22, 0.2); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.4); }
-.risk-moderate { background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4); }
-.risk-cool { background: rgba(6, 182, 212, 0.2); color: #06b6d4; border: 1px solid rgba(6, 182, 212, 0.4); }
+.risk-critical { background: rgba(255, 180, 171, 0.2); color: theme('colors.error'); border: 1px solid rgba(255, 180, 171, 0.4); }
+.risk-hot { background: rgba(245, 158, 11, 0.2); color: theme('colors.primary-container'); border: 1px solid rgba(245, 158, 11, 0.4); }
+.risk-moderate { background: rgba(255, 193, 116, 0.2); color: theme('colors.primary'); border: 1px solid rgba(255, 193, 116, 0.4); }
+.risk-cool { background: rgba(78, 222, 163, 0.2); color: theme('colors.secondary'); border: 1px solid rgba(78, 222, 163, 0.4); }
