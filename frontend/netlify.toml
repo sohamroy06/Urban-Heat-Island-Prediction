@@ -1,0 +1,8 @@
+[build]
+  command = "npm ci && node ./node_modules/vite/bin/vite.js build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
