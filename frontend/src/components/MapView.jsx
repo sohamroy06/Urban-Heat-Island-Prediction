@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-function getColor(lst) {
+export function getColor(lst) {
     if (lst >= 44) return '#7f1d1d';
     if (lst >= 42) return '#991b1b';
     if (lst >= 40) return '#dc2626';
@@ -24,22 +24,22 @@ function Legend() {
         legend.onAdd = function () {
             const div = L.DomUtil.create('div', 'legend');
             div.style.cssText = `
-        background: rgba(26, 29, 39, 0.95);
+        background: rgba(28, 25, 23, 0.95);
         padding: 12px 14px;
-        border-radius: 8px;
-        border: 1px solid #363c50;
-        color: #e2e8f0;
-        font-family: Inter, sans-serif;
+        border-radius: 10px;
+        border: 1px solid #332d2a;
+        color: #e8e0d8;
+        font-family: 'Public Sans', sans-serif;
         font-size: 11px;
         line-height: 1.6;
         backdrop-filter: blur(8px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.4);
       `;
 
             const grades = [28, 30, 32, 34, 36, 38, 40, 42, 44];
             const labels = ['<30°C', '30°C', '32°C', '34°C', '36°C', '38°C', '40°C', '42°C', '44°C+'];
 
-            let html = '<div style="font-weight:600;margin-bottom:6px;color:#f59e0b;">Surface Temp (°C)</div>';
+            let html = '<div style="font-weight:600;margin-bottom:6px;color:#a5b4fc;">Surface Temp (°C)</div>';
             for (let i = 0; i < grades.length; i++) {
                 html +=
                     `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">` +
@@ -68,7 +68,7 @@ function MapUpdater({ center }) {
     return null;
 }
 
-export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, flyToCenter }) {
+export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, flyToCenter, refreshToken }) {
     const geoJsonRef = useRef(null);
 
     const delhiCenter = [28.63, 77.22];
@@ -82,36 +82,54 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
                 fillColor: getColor(lst),
                 weight: isSelected ? 2.5 : 0.8,
                 opacity: 1,
-                color: isSelected ? '#f59e0b' : '#363c50',
+                color: isSelected ? '#a5b4fc' : '#332d2a',
                 fillOpacity: isSelected ? 0.9 : 0.7,
             };
         };
     }, [selectedBlockId]);
 
+    // react-leaflet's <GeoJSON> mounts once and does not re-diff `data`
+    // (see App.jsx / MapView history: a `key`-based remount-per-click used
+    // to live here and was the source of dropped/late click events). It
+    // *does* reactively re-apply the `style` prop to existing layers, which
+    // is all selection highlighting needs. City-wide what-if mutates the
+    // same geojsonData object's feature properties in place and bumps
+    // refreshToken so the already-mounted layers get restyled without a
+    // remount.
+    useEffect(() => {
+        if (geoJsonRef.current) {
+            geoJsonRef.current.setStyle(style);
+        }
+    }, [refreshToken, style]);
+
     const onEachFeature = useMemo(() => {
         return (feature, layer) => {
             const props = feature.properties;
-            const lst = props.predicted_lst || props.lst || 'N/A';
-            const ci_lower = props.ci_lower || '';
-            const ci_upper = props.ci_upper || '';
 
-            const tooltipContent = `
-        <div style="font-family:Inter,sans-serif;">
-          <div style="font-weight:600;font-size:12px;margin-bottom:3px;">
-            ${props.block_name || props.block_id}
+            const renderTooltip = () => {
+                const lst = props.predicted_lst || props.lst || 'N/A';
+                const ci_lower = props.ci_lower || '';
+                const ci_upper = props.ci_upper || '';
+                return `
+          <div style="font-family:'Public Sans',sans-serif;">
+            <div style="font-weight:600;font-size:12px;margin-bottom:3px;">
+              ${props.block_name || props.block_id}
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:${getColor(lst)};">
+              ${lst}°C
+            </div>
+            ${ci_lower ? `<div style="font-size:10px;color:#8c7d72;">CI: ${ci_lower}°C – ${ci_upper}°C</div>` : ''}
           </div>
-          <div style="font-size:18px;font-weight:700;color:${getColor(lst)};">
-            ${lst}°C
-          </div>
-          ${ci_lower ? `<div style="font-size:10px;color:#94a3b8;">CI: ${ci_lower}°C – ${ci_upper}°C</div>` : ''}
-        </div>
-      `;
+        `;
+            };
 
-            layer.bindTooltip(tooltipContent, {
+            layer.bindTooltip(renderTooltip(), {
                 sticky: true,
                 className: 'custom-tooltip',
                 direction: 'top',
             });
+
+            layer.on('tooltipopen', () => layer.setTooltipContent(renderTooltip()));
 
             layer.on('click', () => {
                 if (onSelectBlock) {
@@ -120,10 +138,6 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
             });
         };
     }, [onSelectBlock]);
-
-    const geoJsonKey = useMemo(() => {
-        return selectedBlockId ? `geo-${selectedBlockId}` : 'geo-default';
-    }, [selectedBlockId]);
 
     return (
         <div className="h-full w-full relative">
@@ -142,7 +156,6 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
 
                 {geojsonData && (
                     <GeoJSON
-                        key={geoJsonKey}
                         ref={geoJsonRef}
                         data={geojsonData}
                         style={style}
@@ -155,10 +168,10 @@ export default function MapView({ geojsonData, selectedBlockId, onSelectBlock, f
             </MapContainer>
 
             {!geojsonData && (
-                <div className="absolute inset-0 flex items-center justify-center bg-dark-900/80 z-[1000]">
-                    <div className="text-center animate-fade-in">
-                        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-gray-400 text-sm">Loading map data...</p>
+                <div className="absolute inset-0 flex items-center justify-center bg-ink-950/85 z-[1000]">
+                    <div className="text-center">
+                        <div className="w-10 h-10 border-2 border-signal-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                        <p className="text-ink-300 text-sm">Loading map data…</p>
                     </div>
                 </div>
             )}

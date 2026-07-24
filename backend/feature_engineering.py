@@ -4,6 +4,7 @@ feature_engineering.py — ShadowMap Feature Engineering
 Builds the block-level feature matrix with interaction features and scaling.
 """
 
+import json
 import os
 import joblib
 import numpy as np
@@ -32,7 +33,7 @@ TARGET_COLUMN = "lst"
 ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_artifacts")
 
 
-def compute_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
+def compute_interaction_features(df: pd.DataFrame, dtw_max: float = None) -> pd.DataFrame:
     """
     Compute interaction features from base features.
 
@@ -41,6 +42,12 @@ def compute_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df: DataFrame with base feature columns.
+        dtw_max: Fixed normalization constant for distance_to_water, computed
+            once from the training set (see fit_feature_constants). Must be
+            passed explicitly for single-row inference — normalizing against
+            the row's own max collapses distance_to_water to a constant and
+            silently zeroes out cooling_potential. Falls back to the
+            dataframe's own max only when omitted (e.g. ad-hoc batch scripts).
 
     Returns:
         DataFrame with added interaction feature columns.
@@ -54,7 +61,9 @@ def compute_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     dtw = df["distance_to_water"]
-    dtw_max = dtw.max()
+    if dtw_max is None:
+        dtw_max = dtw.max()
+
     if dtw_max > 0:
         dtw_normalized = 1.0 - (dtw / dtw_max)
     else:
@@ -63,6 +72,50 @@ def compute_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
     df["cooling_potential"] = df["green_cover"] * dtw_normalized
 
     return df
+
+
+def fit_feature_constants(df: pd.DataFrame, save: bool = True) -> dict:
+    """
+    Compute fixed normalization constants from the training set and
+    optionally save them, so inference (including single-row predictions)
+    uses the same constants training did instead of recomputing per call.
+
+    Args:
+        df: Raw training DataFrame with base feature columns.
+        save: Whether to save the constants to model_artifacts.
+
+    Returns:
+        Dict of constants, e.g. {"dtw_max": ...}.
+    """
+    constants = {"dtw_max": float(df["distance_to_water"].max())}
+
+    if save:
+        os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+        constants_path = os.path.join(ARTIFACTS_DIR, "feature_constants.json")
+        with open(constants_path, "w") as f:
+            json.dump(constants, f, indent=2)
+        print(f"[INFO] Feature constants saved to {constants_path}")
+
+    return constants
+
+
+def load_feature_constants() -> dict:
+    """
+    Load previously fitted feature normalization constants from model_artifacts.
+
+    Returns:
+        Dict of constants, e.g. {"dtw_max": ...}.
+
+    Raises:
+        FileNotFoundError: If no saved constants are found.
+    """
+    constants_path = os.path.join(ARTIFACTS_DIR, "feature_constants.json")
+    if not os.path.exists(constants_path):
+        raise FileNotFoundError(
+            f"No feature constants found at {constants_path}. Run training first."
+        )
+    with open(constants_path, "r") as f:
+        return json.load(f)
 
 
 def fit_scaler(df: pd.DataFrame, save: bool = True) -> StandardScaler:
@@ -143,7 +196,12 @@ def prepare_features(
     Returns:
         Tuple of (processed_df, scaler, feature_matrix, target_series).
     """
-    df = compute_interaction_features(df)
+    if fit:
+        constants = fit_feature_constants(df, save=True)
+    else:
+        constants = load_feature_constants()
+
+    df = compute_interaction_features(df, dtw_max=constants["dtw_max"])
 
     if fit:
         scaler = fit_scaler(df, save=True)
@@ -163,18 +221,22 @@ def get_feature_names() -> list:
     return ALL_FEATURES.copy()
 
 
-def get_raw_feature_vector(row: dict) -> np.ndarray:
+def get_raw_feature_vector(row: dict, dtw_max: float = None) -> np.ndarray:
     """
     Extract a raw (unscaled) feature vector from a single row dictionary.
 
     Args:
         row: Dictionary containing feature values.
+        dtw_max: Fixed distance_to_water normalization constant. Defaults to
+            the value saved during training (see load_feature_constants).
 
     Returns:
         numpy array of feature values in the correct order.
     """
+    if dtw_max is None:
+        dtw_max = load_feature_constants()["dtw_max"]
     df = pd.DataFrame([row])
-    df = compute_interaction_features(df)
+    df = compute_interaction_features(df, dtw_max=dtw_max)
     return df[ALL_FEATURES].values[0]
 
 

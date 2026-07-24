@@ -44,14 +44,14 @@ XGBoost regression with quantile models for uncertainty bands (P10/P90). Because
 
 | Metric | Score | What it tells you |
 |---|---|---|
-| **Repeated 5-Fold CV R²** | **0.45** (±0.16) | Most reliable estimate — real predictive signal |
-| Random-split R² | 0.37 | Single-split sanity check |
+| **Repeated 5-Fold CV R²** | **0.45** (±0.19) | Most reliable estimate — real predictive signal |
+| Random-split R² | 0.32 | Single-split sanity check |
 | Spatial CV R² | -1.01 | Hardest test: generalize to *unseen* geography |
-| MAE (spatial test) | 1.8°C | Typical prediction error |
+| MAE (spatial test) | 1.7°C | Typical prediction error |
 
 > **Why the spatial score looks worse:** Delhi's west and east sides differ by ~2.2°C on average — a real geographic effect, not a model failure. We report it anyway because burying inconvenient numbers isn't science.
 
-**Top predictive features:** Green Cover (26%) → Building Density (13%) → Impervious Surface (12%) → Distance to Water (11%)
+**Top predictive features:** Green Cover (21%) → Impervious Surface (16%) → Heat Stress Index (12%) → Distance to Water (12%)
 
 A Random Forest comparison model was also benchmarked (R² = 0.48) — kept as reference, not deployed, since it can't produce the confidence intervals the app relies on.
 
@@ -93,8 +93,46 @@ Open `http://localhost:5173` — backend must be running on port 8000 for the ma
 |---|---|
 | `GET /api/blocks` | All ward predictions with features |
 | `GET /api/block/{block_id}` | Single block detail + feature contributions |
+| `POST /api/whatif` | Simulate an intervention on one block |
+| `POST /api/whatif-citywide` | Simulate a uniform intervention across all wards (or the top-N hottest) and see the shift in city-wide stats |
 | `GET /api/city-stats` | City-wide temperature statistics |
 | `GET /api/model-info` | Full model metrics, feature importances, training summary |
+
+---
+
+## ☁️ Deploying (Vercel + Netlify)
+
+Backend on **Vercel**, frontend on **Netlify**. `backend/vercel.json` routes `/api/*` to `backend/api/index.py`, which imports the FastAPI `app` from `main.py` and eagerly calls `load_or_train()` at import time — Vercel's Python runtime doesn't reliably run FastAPI's `lifespan` startup hook, so this is the actual load path in production, not `main.py`'s `if __name__ == "__main__"` block.
+
+### 1. Deploy Backend on Vercel
+
+Create a new project from this repo:
+
+- **Root Directory:** `backend`
+- **Framework Preset:** `Other`
+- **Build Command:** leave empty
+- **Output Directory:** leave empty
+- **Install Command:** `pip install -r requirements.txt`
+
+Environment variables:
+- `CORS_ORIGINS=https://YOUR-NETLIFY-SITE.netlify.app`
+
+`requirements.txt` is trimmed to runtime-only packages (`onnx`/`onnxruntime`/`onnxmltools`/`skl2onnx` are commented out) to stay under Vercel's Lambda size limit — install those locally only when running `export_onnx.py` or the RF benchmark scripts.
+
+### 2. Deploy Frontend on Netlify
+
+Create a new site from this repo (`netlify.toml` already sets the build command and SPA redirect):
+
+- **Base directory:** `frontend`
+- **Build command:** `npm run build`
+- **Publish directory:** `dist`
+
+Environment variables:
+- `VITE_API_BASE_URL=https://YOUR-VERCEL-BACKEND.vercel.app/api`
+
+### 3. Final Step
+
+Once both are deployed, set the backend's `CORS_ORIGINS` to the exact final Netlify URL and redeploy the backend once — CORS will reject the frontend's requests otherwise. Confirm it's live by checking that `https://YOUR-VERCEL-BACKEND.vercel.app/api/model-info` returns JSON.
 
 ---
 

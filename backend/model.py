@@ -25,6 +25,7 @@ from feature_engineering import (
     compute_interaction_features,
     prepare_features,
     load_scaler,
+    load_feature_constants,
 )
 
 ARTIFACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_artifacts")
@@ -138,14 +139,14 @@ def train_model(df: pd.DataFrame):
     y_train, y_test = y[train_idx], y[test_idx]
 
     best_params = {
-        "n_estimators": 100,
-        "max_depth": 2,
+        "n_estimators": 150,
+        "max_depth": 3,
         "learning_rate": 0.05,
-        "min_child_weight": 10,
-        "subsample": 0.7,
-        "colsample_bytree": 0.7,
-        "reg_alpha": 1.0,
-        "reg_lambda": 3.0,
+        "min_child_weight": 6,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.5,
+        "reg_lambda": 1.5,
     }
 
     print(f"\n[INFO] Training mean model (CPU, n_jobs=-1)...")
@@ -291,6 +292,7 @@ def train_model(df: pd.DataFrame):
         "lower_model": lower_model,
         "upper_model": upper_model,
         "scaler": scaler,
+        "dtw_max": load_feature_constants()["dtw_max"],
         "metrics": metrics,
         "feature_importance": feature_importance,
     }
@@ -315,6 +317,7 @@ def load_models():
     upper_model.load_model(os.path.join(ARTIFACTS_DIR, "uhi_model_upper.json"))
 
     scaler = load_scaler()
+    dtw_max = load_feature_constants()["dtw_max"]
 
     metrics_path = os.path.join(ARTIFACTS_DIR, "metrics.json")
     with open(metrics_path, "r") as f:
@@ -329,6 +332,7 @@ def load_models():
         "lower_model": lower_model,
         "upper_model": upper_model,
         "scaler": scaler,
+        "dtw_max": dtw_max,
         "metrics": metrics,
         "feature_importance": feature_importance,
     }
@@ -346,7 +350,7 @@ def predict_single(features_dict: dict, models: dict) -> dict:
         Dictionary with predicted_lst, ci_lower, ci_upper, ci_width.
     """
     df = pd.DataFrame([features_dict])
-    df = compute_interaction_features(df)
+    df = compute_interaction_features(df, dtw_max=models["dtw_max"])
 
     X_raw = df[ALL_FEATURES].values
     X_scaled = models["scaler"].transform(X_raw)
@@ -361,10 +365,10 @@ def predict_single(features_dict: dict, models: dict) -> dict:
         pred_upper = pred_mean + abs(pred_mean - pred_lower)
 
     return {
-        "predicted_lst": round(pred_mean, 1),
-        "ci_lower": round(pred_lower, 1),
-        "ci_upper": round(pred_upper, 1),
-        "ci_width": round(pred_upper - pred_lower, 1),
+        "predicted_lst": round(pred_mean, 2),
+        "ci_lower": round(pred_lower, 2),
+        "ci_upper": round(pred_upper, 2),
+        "ci_width": round(pred_upper - pred_lower, 2),
     }
 
 
@@ -387,7 +391,7 @@ def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
     Returns:
         DataFrame with columns: predicted_lst, ci_lower, ci_upper, ci_width.
     """
-    df = compute_interaction_features(features_df.copy())
+    df = compute_interaction_features(features_df.copy(), dtw_max=models["dtw_max"])
     X_raw = df[ALL_FEATURES].values
     X_scaled = models["scaler"].transform(X_raw)
 
@@ -407,10 +411,10 @@ def predict_batch(features_df: pd.DataFrame, models: dict) -> pd.DataFrame:
     )
 
     results = pd.DataFrame({
-        "predicted_lst": np.round(pred_mean, 1),
-        "ci_lower": np.round(pred_lower, 1),
-        "ci_upper": np.round(pred_upper, 1),
-        "ci_width": np.round(pred_upper - pred_lower, 1),
+        "predicted_lst": np.round(pred_mean, 2),
+        "ci_lower": np.round(pred_lower, 2),
+        "ci_upper": np.round(pred_upper, 2),
+        "ci_width": np.round(pred_upper - pred_lower, 2),
     }, index=features_df.index)
 
     return results
@@ -527,7 +531,7 @@ def simulate_whatif(
 
     new_prediction = predict_single(modified, models)
 
-    delta_temp = round(new_prediction["predicted_lst"] - baseline["predicted_lst"], 1)
+    delta_temp = round(new_prediction["predicted_lst"] - baseline["predicted_lst"], 2)
 
     parts = []
     if delta_trees > 0:
@@ -558,7 +562,7 @@ def simulate_whatif(
         temp_str = f"{abs(delta_temp)}°C"
     else:
         direction = "not significantly change"
-        temp_str = "0.0°C"
+        temp_str = "0.00°C"
 
     intervention_str = ", ".join(parts) if parts else "No changes applied"
     ci_str = (
@@ -666,7 +670,7 @@ def simulate_whatif_batch(
         "baseline_lst": baseline_preds["predicted_lst"],
         "predicted_lst": modified_preds["predicted_lst"],
         "delta_temp": np.round(
-            modified_preds["predicted_lst"].values - baseline_preds["predicted_lst"].values, 1
+            modified_preds["predicted_lst"].values - baseline_preds["predicted_lst"].values, 2
         ),
         "ci_lower": modified_preds["ci_lower"],
         "ci_upper": modified_preds["ci_upper"],
@@ -734,7 +738,7 @@ def generate_intervention_curve(
         curve.append({
             "value": val,
             "predicted_lst": result["predicted_lst"],
-            "delta_temp": round(result["predicted_lst"] - baseline, 1),
+            "delta_temp": round(result["predicted_lst"] - baseline, 2),
         })
 
     return curve

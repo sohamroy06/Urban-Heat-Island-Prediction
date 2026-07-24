@@ -5,7 +5,11 @@ scikit-learn
 pandas
 numpy
 joblib
-onnx
-onnxruntime
-onnxmltools
-skl2onnx
+
+# Training/export utilities are intentionally excluded from the Vercel runtime
+# bundle to keep the deployment under Lambda storage limits.
+# Install these locally only when you need model export or benchmark scripts.
+# onnx
+# onnxruntime
+# onnxmltools
+# skl2onnx
