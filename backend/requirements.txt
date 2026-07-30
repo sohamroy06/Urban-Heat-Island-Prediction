@@ -1,11 +1,36 @@
-fastapi
-uvicorn
-xgboost
-scikit-learn
-pandas
-numpy
-joblib
-onnx
-onnxruntime
-onnxmltools
-skl2onnx
+# ShadowMap backend - pinned dependencies
+# Python 3.14.5 on Windows. Versions pinned exactly: this stack is recent
+# (pandas 3.x, numpy 2.5.x) and looser pins have not been tested.
+#
+#   python -m venv venv
+#   venv\Scripts\activate
+#   pip install -r requirements.txt
+
+# ---- core numeric / modelling ----
+numpy==2.5.1
+pandas==3.0.3
+scipy==1.18.0
+scikit-learn==1.9.0
+xgboost==3.3.0
+
+# ---- geospatial ----
+geopandas==1.1.4
+shapely==2.1.2
+pyproj==3.7.2
+
+# ---- API ----
+fastapi==0.139.0
+uvicorn==0.51.0
+pydantic==2.13.4
+
+# ---- data acquisition (needed only to REGENERATE data, not to run the model) ----
+earthengine-api==1.7.34
+osmnx==2.1.0
+
+# ---- notes ----
+# xgboost 3.3.0 provides objective="reg:quantileerror" with quantile_alpha,
+#   used for the P10/P90 interval models. Earlier versions lack it.
+# joblib is a scikit-learn dependency; no longer imported directly. The v1
+#   ward pipeline used it for a StandardScaler pickle. Schema v2 drops scaling
+#   entirely, since XGBoost trees are scale-invariant.
+# geemap is not required.

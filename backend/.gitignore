@@ -1,4 +1,23 @@
-﻿delhi_all_buildings.geojson
+# ---- Large regenerable OSM data (exceeds GitHub 100 MB limit) ----
+delhi_all_buildings.geojson
 delhi_all_roads.geojson
 delhi_landuse.geojson
 osm_tiles/
+
+# ---- Scratch and backup files ----
+*.bak
+file_inventory.json
+grid_master_legacy.csv
+grid_master_night.csv
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.ipynb_checkpoints/
+
+# ---- OS ----
+Thumbs.db
+.DS_Store
+grid_blocks.csv
