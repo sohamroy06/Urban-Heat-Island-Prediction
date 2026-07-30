@@ -1,0 +1,127 @@
+{
+  "schema_version": 2,
+  "features": [
+    "albedo",
+    "ndbi",
+    "mndwi",
+    "bsi"
+  ],
+  "target": "landsat_daytime_lst_celsius",
+  "n_cells": 6709,
+  "grid_cell_size_m": [
+    448.5,
+    505.7
+  ],
+  "grid_cell_area_km2": 0.218,
+  "source": "Landsat 8/9 Collection 2 Level-2 median composite, 2024-04-01 to 2024-06-30, per-pixel QA_PIXEL cloud/shadow masked",
+  "overpass_local_time": "~10:30",
+  "hyperparams": {
+    "n_estimators": 600,
+    "max_depth": 2,
+    "learning_rate": 0.05,
+    "reg_alpha": 1.0,
+    "reg_lambda": 5.0,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "reg:squarederror",
+    "verbosity": 0,
+    "random_state": 42
+  },
+  "validation": {
+    "method": "5 km spatially blocked CV, buffered, 4 repeats",
+    "headline": "blocked 5 km CV: R2 = 0.759 +/- 0.074, RMSE = 1.50 C",
+    "r2": 0.7592,
+    "r2_primary_mean_of_folds": 0.7592,
+    "r2_primary_sd": 0.0739,
+    "rmse_c_primary": 1.5,
+    "r2_pooled_oof": 0.7722,
+    "rmse_c": 1.459,
+    "r2_aggregation_note": "r2_primary_mean_of_folds averages per-fold R2, each scored against its own test block variance. This is the conservative standard for blocked CV and is the number to quote. r2_pooled_oof concatenates all fold predictions and scores once against global variance, which is systematically higher. Both come from the same 5 km blocked folds.",
+    "mae_c": 1.127,
+    "bias_c": 0.001,
+    "interval_coverage": 0.6031,
+    "interval_width_multiplier": 1.6,
+    "n_oof_predictions": 26836
+  },
+  "r2_vs_block_size_sd": {
+    "1km": 0.0089,
+    "2km": 0.024,
+    "5km": 0.0739,
+    "10km": 0.2046
+  },
+  "r2_vs_block_size": {
+    "1km": 0.8527,
+    "2km": 0.8318,
+    "5km": 0.7592,
+    "10km": 0.5819
+  },
+  "random_split_r2_LEAKY_DO_NOT_QUOTE": 0.8722,
+  "permutation_importance": {
+    "albedo": 0.1199,
+    "ndbi": 0.8326,
+    "mndwi": 0.0469,
+    "bsi": 0.0672
+  },
+  "temporal_holdout_2023": {
+    "note": "2024-trained model applied to an independent 2023 composite",
+    "r2_raw": -0.5611,
+    "r2_debiased": 0.5558,
+    "spearman_like_corr": 0.8231,
+    "bias_c": 2.63,
+    "interpretation": "Spatial ranking transfers across years. Absolute temperature does not; recalibration required per season."
+  },
+  "feature_bounds": {
+    "albedo": {
+      "min": 0.0789026111779283,
+      "max": 0.2494262007623398,
+      "p01": 0.1262367279933992,
+      "p99": 0.2135637466315883
+    },
+    "ndbi": {
+      "min": -0.3203382352466722,
+      "max": 0.1381805432269012,
+      "p01": -0.17410387916169917,
+      "p99": 0.11148378772585185
+    },
+    "mndwi": {
+      "min": -0.4630500153098673,
+      "max": 0.0897111151352785,
+      "p01": -0.4381791826395243,
+      "p99": -0.18871931533657746
+    },
+    "bsi": {
+      "min": -0.2357110087544493,
+      "max": 0.177481757351524,
+      "p01": -0.09088271572889998,
+      "p99": 0.15630258142659492
+    }
+  },
+  "whatif_supported": false,
+  "known_limitations": [
+    "Daytime SURFACE temperature (~10:30 local) only; NOT air temperature",
+    "Single season, April-June 2024 pre-monsoon; absolute values do not transfer across years",
+    "Delhi NCT only; no evidence of transfer to other cities",
+    "ndbi correlates -0.323 with OSM building density: it measures SURFACE DRYNESS, not urbanisation",
+    "Landsat L2 emissivity retrieval uses NDVI, giving partial circularity with optical predictors",
+    "Predicts the thermal band of the same Landsat composite the predictors come from; cross-sensor check against MODIS gives R2 0.298 against a sensor-agreement ceiling of 0.472",
+    "OSM building/road and WorldPop features show NO daytime predictive skill; excluded",
+    "Daytime Delhi shows a surface urban COOL island: dense areas are ~3.5 C cooler at 10:30, and ~3.2 C hotter at 01:30 (MODIS). Do not use for building-density policy inference",
+    "Model compresses extremes: under-predicts hottest cells ~1 C, over-predicts coldest ~0.7 C",
+    "Errors ~1.7x larger in cells adjacent to the NCT boundary",
+    "Dense-population zones (SE industrial belt) under-predicted; anthropogenic heat is not observable from optical reflectance",
+    "Intervention/what-if modelling unsupported; albedo failed causal testing in two designs"
+  ],
+  "residual_diagnostics_out_of_fold": {
+    "residual_std_c": 1.313,
+    "rmse_c": 1.313,
+    "cells_abs_err_gt_3c": 184,
+    "cells_abs_err_gt_5c": 5,
+    "note": "Computed from 5 km blocked out-of-fold predictions. In-sample residuals read ~1.04 C std and must not be reported as model error."
+  },
+  "confidence_classes": {
+    "normal": "features within p01-p99, not near boundary, out-of-fold error <= 3 C",
+    "edge_higher_error": "within 1 km of the NCT boundary; errors ~1.7x larger",
+    "atypical_features": "one or more features outside the p01-p99 training range",
+    "poorly_predicted": "out-of-fold absolute error above 3 C"
+  }
+}

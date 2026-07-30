@@ -1,0 +1,35 @@
+{
+  "purpose": "Archived scripts from ShadowMap development. Nothing here is needed to run or retrain the model. Kept for provenance and reproducibility of the analysis history.",
+  "active_pipeline_order": [
+    "generate_grid.py -> delhi_grid.geojson",
+    "clip_grid.py -> delhi_grid_clipped.geojson (query \"National Capital Territory of Delhi, India\")",
+    "filter_slivers.py -> delhi_grid_filtered.geojson (6709 cells, master grid)",
+    "bulk_download_osm.py + merge_osm_tiles.py -> delhi_all_{buildings,roads}.geojson (gitignored, 4.5GB/375MB)",
+    "aggregate_density.py -> grid_density.csv (not used by the model; kept for context)",
+    "fetch_grid_lst.py -> grid_lst_ndvi.csv (GEE; provides the lst target)",
+    "step10_fetch_indices.py -> grid_indices.csv (GEE; provides albedo/ndbi/mndwi/bsi)",
+    "step13_night_lst.py -> grid_lst_night.csv (GEE; MODIS night, observation only)",
+    "build_master.py -> grid_master.csv",
+    "train_grid.py -> artifacts_grid/*, grid_predictions.csv",
+    "step30_oof_predictions.py -> adds out-of-fold columns to grid_predictions.csv",
+    "uvicorn main_grid:app --port 8001"
+  ],
+  "archive/analysis": "Validation and diagnostic scripts, numbered by development step. These produced the findings in RESULTS.md: spatial autocorrelation range, R2-vs-block-size curve, feature ablations, temporal holdout, albedo causal tests.",
+  "archive/superseded": {
+    "fetch_density.py": "ward-era Overpass density fetch, superseded by fetch_density_v3 then by aggregate_density.py",
+    "fetch_density_v2.py": "ward-era retry variant of fetch_density.py",
+    "fetch_density_v3.py": "ward-era final density fetch; grid pipeline uses aggregate_density.py",
+    "fetch_heights.py": "ward-era OSM building:levels fetch; height dropped, no predictive skill",
+    "fetch_lst_v2.py": "ward-era per-scene LST fetch; abandoned for date-mismatch noise",
+    "fetch_lst_v3.py": "ward-era LST fetch, superseded by fetch_grid_lst.py",
+    "merge_final.py": "ward-era sample_data.csv builder, v1",
+    "merge_final_v2.py": "ward-era sample_data.csv builder, v2",
+    "mop_up.py": "ward-era gap filler for rate-limited Overpass cells",
+    "refetch_failed.py": "ward-era retry harness for failed Overpass cells",
+    "improve_model.py": "ward-era hyperparameter experiment, superseded by train_grid.py",
+    "train_rf_comparison.py": "ward-era RandomForest benchmark (R2 0.4829); not adopted, no quantile intervals",
+    "test_gee.py": "three-line GEE connectivity check"
+  },
+  "archive/ward_pipeline": "The original 95-ward pipeline and its FastAPI app (main.py, port 8000). Still functional and untouched. Reported R2 0.4523 under repeated random-split CV, which is inflated by spatial autocorrelation.",
+  "note_on_step_numbering": "Gaps in step numbers (1,3,18,24-29,31,34,35) were inline commands or patches that produced no standalone script file."
+}
