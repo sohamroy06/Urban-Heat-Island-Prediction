@@ -1,5 +1,14 @@
 # ShadowMap — AMD Deployment Guide
 
+> **Note:** `model.py` currently trains with `tree_method="hist"` and CPU
+> multi-threading (`n_jobs=-1`) only; it does not pass an XGBoost `device`
+> parameter, and there is no `export_onnx.py`/`benchmark.py` step in the
+> live ward pipeline. This guide documents the ROCm/GPU deployment path
+> from an earlier iteration of the project (see `git log`) as a reference
+> for reintroducing GPU support later; it is not the currently deployed
+> configuration. The commands below have been updated to point at their
+> actual (archived) locations.
+
 ## Architecture Overview
 
 ShadowMap is **hardware-agnostic** by design. The inference engine runs identically on:
@@ -96,14 +105,14 @@ source venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Train the model (auto-detects GPU)
-python train_model.py
+# 4. Train the model (archived reference script, not part of the live pipeline)
+python archive/ward_pipeline/train_model.py
 
-# 5. Export to ONNX
-python export_onnx.py
+# 5. Export to ONNX (archived reference script)
+python archive/ward_pipeline/export_onnx.py
 
-# 6. Run benchmarks
-python benchmark.py
+# 6. Run benchmarks (archived reference script)
+python archive/ward_pipeline/benchmark.py
 
 # 7. Start the API server
 uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
@@ -127,9 +136,10 @@ gunicorn main:app \
 The system runs on **any hardware** without modification:
 
 ```bash
-# Standard setup (CPU or NVIDIA GPU auto-detected)
+# Standard setup — model_artifacts/ already contains trained models, so
+# main.py loads them directly; retraining is optional (see archived
+# train_model.py above)
 pip install -r requirements.txt
-python train_model.py
 python main.py
 ```
 
@@ -160,9 +170,9 @@ XGBoost automatically falls back to CPU if no GPU is available. ONNX Runtime use
 ## Verifying GPU Usage
 
 ```python
-# Check XGBoost device
-from model import XGB_DEVICE
-print(f"XGBoost device: {XGB_DEVICE}")
+# Check XGBoost's tree method (model.py hardcodes tree_method="hist", n_jobs=-1)
+import xgboost as xgb
+print(f"XGBoost version: {xgb.__version__}")
 
 # Check ONNX Runtime providers
 import onnxruntime as ort

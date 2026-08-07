@@ -11,10 +11,11 @@
     "step13_night_lst.py -> grid_lst_night.csv (GEE; MODIS night, observation only)",
     "build_master.py -> grid_master.csv",
     "train_grid.py -> artifacts_grid/*, grid_predictions.csv",
-    "step30_oof_predictions.py -> adds out-of-fold columns to grid_predictions.csv",
+    "add_oof_columns.py -> adds out-of-fold columns to grid_predictions.csv",
     "uvicorn main_grid:app --port 8001"
   ],
-  "archive/analysis": "Validation and diagnostic scripts, numbered by development step. These produced the findings in RESULTS.md: spatial autocorrelation range, R2-vs-block-size curve, feature ablations, temporal holdout, albedo causal tests.",
+  "note_2026_08_07_cleanup": "backend/main.py, data_pipeline.py, feature_engineering.py, model.py were restored from archive/ward_pipeline back to backend root: backend/api/index.py (the real Vercel entrypoint) imports from main.py, and the frontend's API calls (/api/blocks, /api/block/{id}, /api/whatif, /api/whatif-citywide) only match this ward-pipeline API shape. Those four files being archived here (while sample_data.csv, delhi_blocks.geojson and model_artifacts/ stayed at backend root) was an unintentional side effect of the grid-schema-v2 merge that broke production. main_grid.py (port 8001) remains a separate, standalone system, exactly as documented above.",
+  "archive/analysis": "Validation and diagnostic scripts, numbered by development step. These produced the findings in RESULTS.md: spatial autocorrelation range, R2-vs-block-size curve, feature ablations, temporal holdout, albedo causal tests. Also holds: grid_2023.csv, grid_2023_matched.csv, grid_2024_matched.csv, grid_merged_v5.csv (inputs/outputs of the temporal-holdout scripts step19-21/23 and the early autocorrelation scripts step2/step4 - none has a live producer or consumer outside this folder); patch_train_headline.py (one-time script that patched train_grid.py to add the corrected 'headline' metric field - already applied and committed, confirmed by grep against the current train_grid.py and artifacts_grid/model_meta.json, safe to re-run only as a no-op).",
   "archive/superseded": {
     "fetch_density.py": "ward-era Overpass density fetch, superseded by fetch_density_v3 then by aggregate_density.py",
     "fetch_density_v2.py": "ward-era retry variant of fetch_density.py",
@@ -27,9 +28,13 @@
     "mop_up.py": "ward-era gap filler for rate-limited Overpass cells",
     "refetch_failed.py": "ward-era retry harness for failed Overpass cells",
     "improve_model.py": "ward-era hyperparameter experiment, superseded by train_grid.py",
-    "train_rf_comparison.py": "ward-era RandomForest benchmark (R2 0.4829); not adopted, no quantile intervals",
-    "test_gee.py": "three-line GEE connectivity check"
+    "train_rf_comparison.py": "ward-era RandomForest benchmark (R2 0.4829); not adopted, no quantile intervals. Its output, rf_comparison_metrics.json, is archived alongside it (referenced only as a 'kept as reference, not deployed' note in the root README, never loaded by code)",
+    "test_gee.py": "three-line GEE connectivity check",
+    "real_density.csv / real_heights.csv / real_lst_ndvi_v2.csv / real_lst_ndvi_v3.csv": "ward-era intermediate fetch outputs, inputs to merge_final.py/merge_final_v2.py which built the sample_data.csv now at backend root. No live producer or consumer.",
+    "delhi_wards_valid.geojson": "geometry-validated copy of delhi_wards.geojson, produced by fetch_density_v3.py"
   },
-  "archive/ward_pipeline": "The original 95-ward pipeline and its FastAPI app (main.py, port 8000). Still functional and untouched. Reported R2 0.4523 under repeated random-split CV, which is inflated by spatial autocorrelation.",
+  "archive/ward_pipeline": "The original 95-ward pipeline and its FastAPI app - main.py, data_pipeline.py, feature_engineering.py, model.py were restored to backend root on 2026-08-07 (see note above) because they are the live production backend, not a legacy artifact. This folder now holds only the ward-era files NOT needed at runtime: benchmark.py, export_onnx.py (+ its output uhi_model.onnx), get_wards.py (+ its output delhi_wards.geojson), install_dependencies.py, train_model.py, fetch_real_data.py (+ its output real_lst_ndvi.csv). Reported R2 0.4523 under repeated random-split CV, which is inflated by spatial autocorrelation.",
+  "archive/orphaned_data": "CSV/GeoJSON files with zero references anywhere in the repository - no producer script and no consumer script, in either active code or any other archive folder: grid_elevation.csv, grid_landuse.csv, grid_merged.csv, grid_merged_coords.csv, grid_merged_v2.csv, grid_merged_v3.csv, grid_merged_v4.csv, grid_merged_v6.csv, grid_ndvi_seasonal.csv, grid_population.csv, grid_water_dist.csv, delhi_water.geojson. Likely leftovers from the abandoned 9-feature grid schema (elevation/water-distance/landuse/population, dropped per RESULTS.md 4.4) and the pre-build_master.py grid_merged_v2..v6 merge chain. Preserved rather than deleted since they represent real fetched satellite/OSM/WorldPop data that would be costly to reacquire, in case a future schema revisits these features.",
+  "archive/legacy_artifacts": "uhi_model.pkl, uhi_model_lower.pkl, uhi_model_upper.pkl - pickle-format duplicates of the ward pipeline's mean/lower/upper models. No script anywhere (active or archived) writes or reads these filenames; model.py exclusively uses the .json equivalents in model_artifacts/ (XGBoost-native format, 'no pickle' per its own comment). Likely relics from before the switch to the portable JSON save format. Kept rather than deleted for the same reason as archive/orphaned_data.",
   "note_on_step_numbering": "Gaps in step numbers (1,3,18,24-29,31,34,35) were inline commands or patches that produced no standalone script file."
 }
