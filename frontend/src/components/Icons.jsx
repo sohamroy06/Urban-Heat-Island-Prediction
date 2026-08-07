@@ -118,25 +118,6 @@ export function SparklesIcon(props) {
     );
 }
 
-export function TargetIcon(props) {
-    return (
-        <svg {...base} {...props}>
-            <circle cx="12" cy="12" r="8" />
-            <circle cx="12" cy="12" r="4" />
-            <circle cx="12" cy="12" r="0.5" fill="currentColor" />
-        </svg>
-    );
-}
-
-export function CompareIcon(props) {
-    return (
-        <svg {...base} {...props}>
-            <path d="M8 3v18M16 3v18" />
-            <path d="m5 8-3 3 3 3M19 8l3 3-3 3" />
-        </svg>
-    );
-}
-
 export function AlertIcon(props) {
     return (
         <svg {...base} {...props}>
