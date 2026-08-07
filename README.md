@@ -138,14 +138,17 @@ Once both are deployed, set the backend's `CORS_ORIGINS` to the exact final Netl
 
 ## 🔄 Rebuilding the Data Pipeline
 
-Want to refresh with newer satellite passes or extend coverage?
+Want to refresh with newer satellite passes or extend coverage? These steps
+live under `backend/archive/ward_pipeline/` and `backend/archive/superseded/`
+(archived because `sample_data.csv` is already built and checked in — rerun
+them only to regenerate it from scratch):
 
-1. `get_wards.py` — pull ward boundaries from OSM
-2. `fetch_lst_v3.py` — single-composite Landsat LST + NDVI (avoids date-mismatch noise)
-3. `fetch_density_v3.py` — building/road density via osmnx (rate-limit resilient, resumable)
-4. `fetch_heights.py` — building heights from OSM tags where available
-5. `merge_final_v2.py` — assembles everything into `sample_data.csv`
-6. `train_model.py` — trains mean + quantile models, logs all validation metrics
+1. `archive/ward_pipeline/get_wards.py` — pull ward boundaries from OSM
+2. `archive/superseded/fetch_lst_v3.py` — single-composite Landsat LST + NDVI (avoids date-mismatch noise)
+3. `archive/superseded/fetch_density_v3.py` — building/road density via osmnx (rate-limit resilient, resumable)
+4. `archive/superseded/fetch_heights.py` — building heights from OSM tags where available
+5. `archive/superseded/merge_final_v2.py` — assembles everything into `sample_data.csv`
+6. `archive/ward_pipeline/train_model.py` — trains mean + quantile models, logs all validation metrics
 
 > **Heads up:** Overpass API rate-limits aggressively. Scripts are built to resume from where they left off — just rerun if interrupted.
 

@@ -117,9 +117,15 @@ uvicorn main_grid:app --port 8001
 python test_api.py
 
 
-The legacy 95-ward app is preserved at `archive/ward_pipeline/main.py` and still
-runs on port 8000. Its reported R2 of 0.4523 came from repeated random-split CV
-and is inflated by spatial autocorrelation.
+The legacy 95-ward app (`main.py`, port 8000) is the one actually deployed to
+production (Vercel imports it via `api/index.py`, and the frontend calls its
+`/api/blocks`, `/api/block/{id}`, `/api/whatif` endpoints exclusively) - it is
+not archived. Its reported R2 of 0.4523 came from repeated random-split CV
+and is inflated by spatial autocorrelation; `main_grid.py` above is the newer,
+honestly-validated system, but it runs standalone and is not wired to the
+deployed frontend. Only the ward pipeline's non-runtime scripts (data-fetch
+utilities, `train_model.py`, `export_onnx.py`, `benchmark.py`) live under
+`archive/ward_pipeline/`.
 
 ---
 
@@ -164,7 +170,7 @@ fetch_grid_lst.py GEE: LST target
 step10_fetch_indices.py GEE: the 4 model features
 step13_night_lst.py GEE: MODIS night LST (observation only)
 artifacts_grid/ models + model_meta.json
-archive/ 45 archived scripts, see MANIFEST.json
+archive/ 44 archived scripts + archived/superseded data, see MANIFEST.json
 RESULTS.md full methodology and findings
 ## Caveat on reproducing the grid
 

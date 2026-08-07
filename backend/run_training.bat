@@ -1,6 +1,6 @@
 @echo off
 echo Running ShadowMap training pipeline...
-python -u "%~dp0train_model.py"
+python -u "%~dp0archive\ward_pipeline\train_model.py"
 if errorlevel 1 (
     echo.
     echo ERROR: Training failed. Make sure Python and required packages are installed.
