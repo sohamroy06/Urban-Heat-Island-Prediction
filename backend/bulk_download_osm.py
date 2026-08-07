@@ -1,5 +1,4 @@
 import osmnx as ox
-import geopandas as gpd
 import numpy as np
 import time
 import os

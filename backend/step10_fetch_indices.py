@@ -1,4 +1,4 @@
-﻿import ee, geopandas as gpd, pandas as pd, numpy as np, time, os
+﻿import ee, geopandas as gpd, pandas as pd, time, os
 
 ee.Initialize(project='shadowmap-502308')
 print('GEE ok')

@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from data_pipeline import generate_synthetic_data, generate_geojson
-from feature_engineering import ALL_FEATURES, FEATURE_COLUMNS, compute_interaction_features
+from feature_engineering import FEATURE_COLUMNS
 from model import (
     train_model,
     load_models,
@@ -33,7 +33,6 @@ from model import (
     simulate_whatif,
     simulate_whatif_batch,
     generate_intervention_curve,
-    get_feature_importance,
     ARTIFACTS_DIR,
 )
 

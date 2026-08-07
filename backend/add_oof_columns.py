@@ -1,5 +1,5 @@
 ﻿"""
-step30_oof_predictions.py
+add_oof_columns.py
 
 Fixes two reporting bugs found in the API self-test:
 
@@ -12,7 +12,6 @@ BUG 2: the extrapolation flag fired on 369 training cells (5.5%), mostly at
 Adds oof_pred / oof_residual columns and a 3-level confidence class.
 """
 import numpy as np, pandas as pd, json, os
-from scipy.spatial import cKDTree
 from sklearn.metrics import r2_score
 from xgboost import XGBRegressor
 

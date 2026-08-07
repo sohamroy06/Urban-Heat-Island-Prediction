@@ -14,13 +14,6 @@ import numpy as np
 import pandas as pd
 
 try:
-    import geopandas as gpd
-    from shapely.geometry import Polygon, Point, box
-    HAS_GEO = True
-except ImportError:
-    HAS_GEO = False
-
-try:
     import osmnx as ox
     HAS_OSMNX = True
 except ImportError:

@@ -10,9 +10,7 @@ optimized for AMD EPYC server-class CPUs.
 
 import json
 import os
-from typing import Optional
 
-import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
